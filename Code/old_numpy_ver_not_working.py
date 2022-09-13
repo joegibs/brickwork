@@ -70,7 +70,7 @@ class circuit:
 
 
 #%%
-circ = circuit(6)
+circ = circuit(2)
 circ.gen_step(0)
 print(circ.pairs)
 circ.print_arr()
