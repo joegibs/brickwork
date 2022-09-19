@@ -1,3 +1,11 @@
+"""
+TODO:
+    -better way to visualize
+    -classical meas
+    -comments
+
+"""
+
 import itertools
 from operator import add
 from telnetlib import EL
@@ -5,7 +13,9 @@ from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
+
 #%%
+
 
 def match(theta, phi):
     return np.array(
@@ -16,6 +26,7 @@ def match(theta, phi):
             [np.sin(theta), 0, 0, np.cos(theta)],
         ]
     )
+
 
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
@@ -32,7 +43,16 @@ class circuit:
 
     """
 
-    def __init__(self, num_elems, num_steps, gate="bell", init="up", architecture="brick",meas_r=0.0,target=0):
+    def __init__(
+        self,
+        num_elems,
+        num_steps,
+        gate="bell",
+        init="up",
+        architecture="brick",
+        meas_r=0.0,
+        target=0,
+    ):
         """
         num_elems: number of elements in the chain
         gate: type of gate used
@@ -62,16 +82,16 @@ class circuit:
         self.dims = [2] * self.num_elems
         self.gate = gate
 
-        self.num_steps=num_steps
+        self.num_steps = num_steps
         self.step_num = 0
         self.pairs = []
         self.target = 0
-        
+
         self.gen_circ()
-        self.step_num=0
-        
+        self.step_num = 0
+
         self.target = target
-        self.rec_mut_inf=[self.mutinfo(self.target)]
+        self.rec_mut_inf = [self.mutinfo(self.target)]
 
     ##################   Building the circuit       ###################
 
@@ -83,17 +103,16 @@ class circuit:
         each step is operation 
         """
         self.circ = []
-        #call some generating thing
+        # call some generating thing
         for i in range(self.num_steps):
             """
             force every other to be a meas
             """
-            if i%2==0:
-                self.circ.append(self.gen_step('gates',self.architecture))
-            if i%2==1:
-                self.circ.append(self.gen_step('meas',self.meas_r))
+            if i % 2 == 0:
+                self.circ.append(self.gen_step("gates", self.architecture))
+            if i % 2 == 1:
+                self.circ.append(self.gen_step("meas", self.meas_r))
 
-    
     def gen_step(self, operation: str, architecture: str):
         """
         needs to generate a single step in circ
@@ -103,17 +122,17 @@ class circuit:
         """
         step_dct = {}
 
-        if operation =='gates':
-            if architecture =='brick':
-                pairs=self.gen_pairs(self.step_num%2)
-                step_dct.update({self.gate:pairs})
-                self.step_num+=1
-            if architecture == 'stair':
+        if operation == "gates":
+            if architecture == "brick":
+                pairs = self.gen_pairs(self.step_num % 2)
+                step_dct.update({self.gate: pairs})
+                self.step_num += 1
+            if architecture == "stair":
                 pass
-        elif operation == 'meas':
+        elif operation == "meas":
             if type(architecture) == float:
-                pairs=self.gen_rand_meas()
-                step_dct.update({'meas':pairs})
+                pairs = self.gen_rand_meas()
+                step_dct.update({"meas": pairs})
             else:
                 pass
         return step_dct
@@ -140,22 +159,21 @@ class circuit:
         )
 
     def gen_rand_meas(self):
-        tf=list(np.random.random_sample(self.num_elems)<self.meas_r)
-        return [i for i in range(len(tf)) if tf[i]==1]
+        tf = list(np.random.random_sample(self.num_elems) < self.meas_r)
+        return [i for i in range(len(tf)) if tf[i] == 1]
 
     ############     running the circuit       ######################
     def do_step(self):
 
-        #do things
+        # do things
         for i in self.circ:
             for j in list(i.keys()):
                 # print(j,i[j])
-                self.do_operation(j,i[j])
+                self.do_operation(j, i[j])
             self.step_num = self.step_num + 1
 
-            #record things
+            # record things
             self.rec_mut_inf.append(self.mutinfo(self.target))
-
 
     def do_operation(self, op, ps):
 
@@ -184,9 +202,11 @@ class circuit:
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
-            
-    def measure(self,ind):
-        a,self.dop=measure(np.array(circ.dop),ikron(pauli('Z'),[2]*self.num_elems,ind))
+
+    def measure(self, ind):
+        a, self.dop = measure(
+            np.array(circ.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
+        )
 
     def mutinfo(self, target=0):
         # this is mem bad
@@ -200,23 +220,25 @@ class circuit:
         ]
         return mi
         ###############################
+
     def print_state(self):
         for i in range(len(self.dims)):
-            print(partial_trace(circ.dop,circ.dims,[i]))
-
+            print(partial_trace(circ.dop, circ.dims, [i]))
 
 
 #%%
-numstep=125
-circ = circuit(7,numstep,init="rand",meas_r=0.5)
+numstep = 125
+circ = circuit(7, numstep, init="rand", meas_r=0.01, gate="match")
 #%%
 # for i in range(numstep):
 circ.do_step()
-    # circ.print_state()
-    # print()
+# circ.print_state()
+# print()
 #%%
 plt.imshow(np.log(np.array(circ.rec_mut_inf).round(3)))
-plt.title("Log Mutual Information with site 0")
+plt.title("Log Mutual Information site 0")
 plt.ylabel("step number")
 plt.xlabel("site number")
 plt.colorbar()
+#%%
+plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
