@@ -1,7 +1,10 @@
 """
 TODO:
     -better way to visualize
-    -classical meas
+    -markov
+        sumi Mij=1
+        probs dont sum to 1 obvs need to make not densop?
+        dim mismatch if ket, neg probs if skrew it
     -comments
 
 """
@@ -13,6 +16,11 @@ from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
+#%%
+def pair_kron(arr, pair, elements):
+    #should do some checks
+    mat=np.identity(2**elements)
+    
 
 #%%
 
@@ -26,7 +34,15 @@ def match(theta, phi):
             [np.sin(theta), 0, 0, np.cos(theta)],
         ]
     )
-
+def markov():
+    #need to check this currently a left matrix....
+    M = np.random.rand(4,4)
+    M=M/np.sum(M,axis=0,keepdims=True)
+    return M
+    
+    
+def rand_markov():
+    pass
 
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
@@ -58,7 +74,7 @@ class circuit:
         gate: type of gate used
             -"bell" hadamard then cnot to make a bell state
             -"haar" haar random unitary operators
-        init: initialization of qqubits
+        init: initialization of qubits
         
         architecture: arrangement of gates
             -"brick": alternating pairs
@@ -75,10 +91,17 @@ class circuit:
             self.dop = computational_state(
                 "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=True
             )
+        elif init == "upB":
+            self.dop = computational_state(
+                "".join(["0" for x in range(self.num_elems)]), qtype="bra", sparse=False
+            )
         elif init == "rand":
             self.dop = rand_product_state(self.num_elems)
             self.dop = qu(self.dop, qtype="dop")
-
+        elif init == "randB":
+            self.dop = rand_product_state(self.num_elems)
+            self.dop = qu(self.dop, qtype="Bra")
+            
         self.dims = [2] * self.num_elems
         self.gate = gate
 
@@ -124,9 +147,10 @@ class circuit:
 
         if operation == "gates":
             if architecture == "brick":
+                # print(self.step_num)
                 pairs = self.gen_pairs(self.step_num % 2)
                 step_dct.update({self.gate: pairs})
-                self.step_num += 1
+                # self.step_num += 1
             if architecture == "stair":
                 pairs = self.gen_staircase()
                 step_dct.update({self.gate: pairs})
@@ -168,7 +192,6 @@ class circuit:
 
     ############     running the circuit       ######################
     def do_step(self):
-
         # do things
         for i in self.circ:
             for j in list(i.keys()):
@@ -195,21 +218,29 @@ class circuit:
             for pair in ps:
                 haar = ikron(rand_uni(2), [2] * self.num_elems, pair)
                 self.dop = haar @ self.dop @ haar.H
-                self.dop.round(4)
+                # self.dop.round(4)
 
         elif op == "match":
             for pair in ps:
                 mat = ikron(rand_match(), [2] * self.num_elems, pair)
                 self.dop = mat @ self.dop @ mat.H
                 self.dop.round(4)
-
+                
+        elif op =="markov":
+            for pair in ps:
+                mat = ikron(markov(), [2] * self.num_elems, pair)
+                # matr = ikron(rightmarkov(),[[]2*self.num_elems,pair])
+                self.dop = np.matmul(qu(self.dop,qtype="bra"),ikron(markov(), [2] * self.num_elems, pair))
+                # self.dop =  qu(circ.dop,qtype="bra")@mat
+                # self.dop.round(4)
+                
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
 
     def measure(self, ind):
         a, self.dop = measure(
-            np.array(circ.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
+            np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
         )
 
     def mutinfo(self, target=0):
@@ -227,12 +258,12 @@ class circuit:
 
     def print_state(self):
         for i in range(len(self.dims)):
-            print(partial_trace(circ.dop, circ.dims, [i]))
+            print(partial_trace(self.dop, self.dims, [i]))
 
 
 #%%
-numstep = 50
-circ = circuit(7, numstep, init="rand", meas_r=0.8, gate="match",architecture='stair')
+numstep = 2*10
+circ = circuit(7, numstep, init="rand", meas_r=0.0, gate="match",architecture='brick')
 #%%
 # for i in range(numstep):
 circ.do_step()
