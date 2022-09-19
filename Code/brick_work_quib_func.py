@@ -128,11 +128,14 @@ class circuit:
                 step_dct.update({self.gate: pairs})
                 self.step_num += 1
             if architecture == "stair":
-                pass
+                pairs = self.gen_staircase()
+                step_dct.update({self.gate: pairs})
+                
         elif operation == "meas":
             if type(architecture) == float:
                 pairs = self.gen_rand_meas()
                 step_dct.update({"meas": pairs})
+                self.step_num += 1
             else:
                 pass
         return step_dct
@@ -151,12 +154,13 @@ class circuit:
         return pairs
 
     def gen_staircase(self):
-        self.pairs = []
+        pairs = []
         if (self.step_num + 1) % self.num_elems == 0:
             self.step_num = self.step_num + 1
-        self.pairs.append(
+        pairs.append(
             [self.step_num % self.num_elems, (self.step_num + 1) % self.num_elems]
         )
+        return pairs
 
     def gen_rand_meas(self):
         tf = list(np.random.random_sample(self.num_elems) < self.meas_r)
@@ -227,8 +231,8 @@ class circuit:
 
 
 #%%
-numstep = 125
-circ = circuit(7, numstep, init="rand", meas_r=0.01, gate="match")
+numstep = 50
+circ = circuit(7, numstep, init="rand", meas_r=0.8, gate="match",architecture='stair')
 #%%
 # for i in range(numstep):
 circ.do_step()
