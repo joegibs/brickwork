@@ -1,14 +1,9 @@
+# -*- coding: utf-8 -*-
 """
-TODO:
-    -better way to visualize
-    -markov
-        sumi Mij=1
-        probs dont sum to 1 obvs need to make not densop?
-        dim mismatch if ket, neg probs if skrew it
-    -comments
+Created on Mon Sep 19 16:05:17 2022
 
+@author: jogib
 """
-
 import itertools
 from operator import add
 from telnetlib import EL
@@ -16,44 +11,18 @@ from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
-#%%
-# def pair_kron(arr, pair, elements):
-#     #should do some checks
-#     mat=np.identity(2**elements)
-#     mat[pair[0],pair[0]]=arr[0,0]
-#     mat[pair[0],pair[1]]=arr[0,1]
-#     mat[pair[1],pair[0]]=arr[1,0]
-#     mat[pair[1],pair[1]]=arr[1,1]
-#     return mat
-    
 
 #%%
-
-
-def match(theta, phi):
-    return np.array(
-        [
-            [np.cos(theta), 0, 0, -np.sin(theta)],
-            [0, np.cos(phi), -np.sin(phi), 0],
-            [0, np.sin(phi), np.cos(phi), 0],
-            [np.sin(theta), 0, 0, np.cos(theta)],
-        ]
-    )
 def markov():
     #need to check this currently a left matrix....
-    M = np.random.rand(4,4)
-    M=M/np.sum(M,axis=1,keepdims=True)
+    M = np.random.rand(2,2)
+    M=M/np.sum(M,axis=0,keepdims=True)
     return M
-    
-    
-def rand_markov():
-    pass
+# def markov():
+#     M=np.array([[0.6,0.2],[0.4,0.8]])
+#     return M
 
-def rand_match():
-    arr = 2 * np.pi * np.random.rand(2)
-    return match(arr[0], arr[1])
-
-
+#%%
 class circuit:
     """
     contains the densop and mixing things
@@ -93,19 +62,8 @@ class circuit:
         """ this need to be updated for different inits"""
 
         if init == "up":
-            self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=True
-            )
-        elif init == "upB":
-            self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="bra", sparse=False
-            )
-        elif init == "rand":
-            self.dop = rand_product_state(self.num_elems)
-            self.dop = qu(self.dop, qtype="dop")
-        elif init == "randB":
-            self.dop = rand_product_state(self.num_elems)
-            
+            self.dop = np.array([np.array([[1.],[0.]]) for x in range(self.num_elems)])
+
         self.dims = [2] * self.num_elems
         self.gate = gate
 
@@ -155,9 +113,6 @@ class circuit:
                 pairs = self.gen_pairs(self.step_num % 2)
                 step_dct.update({self.gate: pairs})
                 # self.step_num += 1
-            if architecture == "stair":
-                pairs = self.gen_staircase()
-                step_dct.update({self.gate: pairs})
                 
         elif operation == "meas":
             if type(architecture) == float:
@@ -207,70 +162,55 @@ class circuit:
             self.rec_mut_inf.append(self.mutinfo(self.target))
 
     def do_operation(self, op, ps):
-
-        # Needs some work
-        if op == "bell":
-            for pair in ps:
-                # print(pair)
-                had = ikron(hadamard(), [2] * self.num_elems, pair[0])
-                step1 = had @ self.dop @ had.H
-                cn = pkron(CNOT(), [2] * self.num_elems, pair)
-                self.dop = cn @ step1 @ cn.H
-                self.dop.round(4)
-
-        elif op == "haar":
-            for pair in ps:
-                haar = ikron(rand_uni(4), [2] * self.num_elems, pair)
-                self.dop = haar @ self.dop @ haar.H
-                # self.dop.round(4)
-
-        elif op == "match":
-            for pair in ps:
-                mat = qu(ikron(rand_match(), [2] * self.num_elems, pair),qtype="dop")
-                self.dop = mat @ self.dop @ mat.H
-                self.dop.round(4)
                 
-        elif op =="markov":
+        if op =="markov":
             for pair in ps:
-                mat = ikron(markov(), [2] * self.num_elems, pair)
-                # matr = ikron(rightmarkov(),[[]2*self.num_elems,pair])
-                self.dop = np.matmul(qu(self.dop,qtype="bra"),ikron(markov(), [2] * self.num_elems, pair))
-                # self.dop = normalize(self.dop)
-                # self.dop =  qu(circ.dop,qtype="bra")@mat
-                # self.dop.round(4)
+                #combine
+                arr = np.hstack((self.dop[pair[0]],self.dop[pair[1]]))
+                #markov
+                mat = np.matmul(markov(),arr)
+                #seperate
+                self.dop[pair[0]]=np.reshape(mat[:,0],(2,1))
+                self.dop[pair[1]]=np.reshape(mat[:,1],(2,1))
                 
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
 
     def measure(self, ind):
-        # self.dop = normalize(self.dop)
-
-        a, self.dop = measure(
-            np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
-        )
+        a, self.dop = self.measure_state(self.dop,ind)
+    def measure_state(self,p,ind):
+        pj=[p[ind][x][0] for x in range(2)]
+        # print(pj)
+        el = [np.array([[1.],[0.]]),np.array([[0.],[1.]])]
+        # then choose one
+        j = np.random.choice([0,1], p=pj)
+        eigenvalue = el[j]
+        
+        p[ind]=eigenvalue
+        
+        return eigenvalue, p
 
     def mutinfo(self, target=0):
         # this is mem bad
         arr = [
-            ptr(self.dop, dims=self.dims, keep=[target, x]).round(4)
-            for x in range(np.size(self.dims))
+            kron(qu(self.dop[target],qtype='dop'),qu(self.dop[x],qtype='dop'))
+            for x in range(self.num_elems)
         ]
         mi = [
-            mutinf(arr[x] if x != target else purify(arr[x]))
-            for x in range(np.size(arr))
+            mutinf(arr[x])
+            for x in range(self.num_elems)
         ]
         return mi
         ###############################
 
     def print_state(self):
-        for i in range(len(self.dims)):
-            print(partial_trace(self.dop, self.dims, [i]))
+        print(self.dop)
 
 
 #%%
-numstep = 2*30
-circ = circuit(5, numstep, init="randB", meas_r=0.1, gate="markov",architecture='brick')
+numstep = 50
+circ = circuit(5, numstep, init="up", meas_r=0.8, gate="markov")
 #%%
 # for i in range(numstep):
 circ.do_step()
@@ -283,53 +223,3 @@ plt.ylabel("step number")
 plt.xlabel("site number")
 plt.colorbar()
 #%%
-plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
-
-#%%
-
-
-from opt_einsum import contract
-
-def measure(p, A, eigenvalue=None, tol=1e-12):
-    if isinstance(A, (tuple, list)):
-        el, ev = A
-    else:
-        el, ev = eigh(A)
-
-    js = np.arange(el.size)
-    # print(ev)
-    # compute prob of each eigenvector
-    if isvec(p):
-        print('hey')
-        print(np.sum(ev,axis=1,keepdims=True))
-        print(np.sum(p,axis=0,keepdims=True))
-
-        pj = (abs(ev.H @ p)**2).flatten()
-    else:
-        print('yarg')
-        pj = contract("jk,kl,lj->j", ev.H, p, ev).real
-    
-    print(pj)
-    # then choose one
-    if eigenvalue is None:
-        j = np.random.choice(js, p=pj)
-        eigenvalue = el[j]
-
-    # now combine whole eigenspace
-    P = projector((el, ev), eigenvalue=eigenvalue, tol=tol)
-    total_prob = np.sum(pj[abs(el - eigenvalue) < tol])
-
-    # now collapse the state
-    if isvec(p):
-        p_after = P @ (p / total_prob**0.5)
-    else:
-        p_after = (P @ p @ P.H) / total_prob
-
-    return eigenvalue, p_after
-
-#%%
-dop=circ.dop
-measure(circ.dop,ikron(pauli('Z'),[2]*2,1))
-
-
-
