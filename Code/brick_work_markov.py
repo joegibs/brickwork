@@ -15,13 +15,16 @@ import matplotlib.pyplot as plt
 #%%
 def markov():
     #need to check this currently a left matrix....
-    M = np.random.rand(2,2)
+    M = np.random.rand(4,4)
     M=M/np.sum(M,axis=0,keepdims=True)
     return M
 # def markov():
 #     M=np.array([[0.6,0.2],[0.4,0.8]])
 #     return M
-
+def decompose_4by1(arr):
+    u1=np.array([[arr[0][0]+arr[1][0]],[arr[2][0]+arr[3][0]]])
+    u2=np.array([[arr[0][0]+arr[2][0]],[arr[1][0]+arr[3][0]]])
+    return u1,u2
 #%%
 class circuit:
     """
@@ -166,12 +169,11 @@ class circuit:
         if op =="markov":
             for pair in ps:
                 #combine
-                arr = np.hstack((self.dop[pair[0]],self.dop[pair[1]]))
+                arr = kron(self.dop[pair[0]],self.dop[pair[1]])
                 #markov
                 mat = np.matmul(markov(),arr)
                 #seperate
-                self.dop[pair[0]]=np.reshape(mat[:,0],(2,1))
-                self.dop[pair[1]]=np.reshape(mat[:,1],(2,1))
+                self.dop[pair[0]],self.dop[pair[1]]=decompose_4by1(mat)
                 
         elif op == "meas":
             for pair in ps:
@@ -194,7 +196,7 @@ class circuit:
     def mutinfo(self, target=0):
         # this is mem bad
         arr = [
-            kron(qu(self.dop[target],qtype='dop'),qu(self.dop[x],qtype='dop'))
+            kron(self.dop[target],self.dop[x])
             for x in range(self.num_elems)
         ]
         mi = [
@@ -210,7 +212,7 @@ class circuit:
 
 #%%
 numstep = 50
-circ = circuit(5, numstep, init="up", meas_r=0.8, gate="markov")
+circ = circuit(9, numstep, init="up", meas_r=0.5, gate="markov")
 #%%
 # for i in range(numstep):
 circ.do_step()
