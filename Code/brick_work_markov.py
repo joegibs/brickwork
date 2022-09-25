@@ -14,17 +14,21 @@ import matplotlib.pyplot as plt
 
 #%%
 def markov():
-    #need to check this currently a left matrix....
-    M = np.random.rand(4,4)
-    M=M/np.sum(M,axis=0,keepdims=True)
+    # need to check this currently a left matrix....
+    M = np.random.rand(4, 4)
+    M = M / np.sum(M, axis=0, keepdims=True)
     return M
+
+
 # def markov():
 #     M=np.array([[0.6,0.2],[0.4,0.8]])
 #     return M
 def decompose_4by1(arr):
-    u1=np.array([[arr[0][0]+arr[1][0]],[arr[2][0]+arr[3][0]]])
-    u2=np.array([[arr[0][0]+arr[2][0]],[arr[1][0]+arr[3][0]]])
-    return u1,u2
+    u1 = np.array([[arr[0][0] + arr[1][0]], [arr[2][0] + arr[3][0]]])
+    u2 = np.array([[arr[0][0] + arr[2][0]], [arr[1][0] + arr[3][0]]])
+    return u1, u2
+
+
 #%%
 class circuit:
     """
@@ -65,7 +69,9 @@ class circuit:
         """ this need to be updated for different inits"""
 
         if init == "up":
-            self.dop = np.array([np.array([[1.],[0.]]) for x in range(self.num_elems)])
+            self.dop = np.array(
+                [np.array([[1.0], [0.0]]) for x in range(self.num_elems)]
+            )
 
         self.dims = [2] * self.num_elems
         self.gate = gate
@@ -116,7 +122,7 @@ class circuit:
                 pairs = self.gen_pairs(self.step_num % 2)
                 step_dct.update({self.gate: pairs})
                 # self.step_num += 1
-                
+
         elif operation == "meas":
             if type(architecture) == float:
                 pairs = self.gen_rand_meas()
@@ -165,44 +171,39 @@ class circuit:
             self.rec_mut_inf.append(self.mutinfo(self.target))
 
     def do_operation(self, op, ps):
-                
-        if op =="markov":
+
+        if op == "markov":
             for pair in ps:
-                #combine
-                arr = kron(self.dop[pair[0]],self.dop[pair[1]])
-                #markov
-                mat = np.matmul(markov(),arr)
-                #seperate
-                self.dop[pair[0]],self.dop[pair[1]]=decompose_4by1(mat)
-                
+                # combine
+                arr = kron(self.dop[pair[0]], self.dop[pair[1]])
+                # markov
+                mat = np.matmul(markov(), arr)
+                # seperate
+                self.dop[pair[0]], self.dop[pair[1]] = decompose_4by1(mat)
+
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
 
     def measure(self, ind):
-        a, self.dop = self.measure_state(self.dop,ind)
-    def measure_state(self,p,ind):
-        pj=[p[ind][x][0] for x in range(2)]
+        a, self.dop = self.measure_state(self.dop, ind)
+
+    def measure_state(self, p, ind):
+        pj = [p[ind][x][0] for x in range(2)]
         # print(pj)
-        el = [np.array([[1.],[0.]]),np.array([[0.],[1.]])]
+        el = [np.array([[1.0], [0.0]]), np.array([[0.0], [1.0]])]
         # then choose one
-        j = np.random.choice([0,1], p=pj)
+        j = np.random.choice([0, 1], p=pj)
         eigenvalue = el[j]
-        
-        p[ind]=eigenvalue
-        
+
+        p[ind] = eigenvalue
+
         return eigenvalue, p
 
     def mutinfo(self, target=0):
         # this is mem bad
-        arr = [
-            kron(self.dop[target],self.dop[x])
-            for x in range(self.num_elems)
-        ]
-        mi = [
-            mutinf(arr[x])
-            for x in range(self.num_elems)
-        ]
+        arr = [kron(self.dop[target], self.dop[x]) for x in range(self.num_elems)]
+        mi = [mutinf(arr[x]) for x in range(self.num_elems)]
         return mi
         ###############################
 

@@ -25,6 +25,7 @@ CP1 = {1: H, 2: S, 3: Z, 4: X, 5: Y, 6: T}
 
 test = {1: univ_rot}
 
+
 class Experiment:
     """
     Class used to generate an expirement where we act on a state with strings 
