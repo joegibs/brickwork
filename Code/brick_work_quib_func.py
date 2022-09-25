@@ -16,6 +16,7 @@ from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
+from opt_einsum import contract
 #%%
 # def pair_kron(arr, pair, elements):
 #     #should do some checks
@@ -42,7 +43,9 @@ def match(theta, phi):
 def markov():
     #need to check this currently a left matrix....
     M = np.random.rand(4,4)
-    M=M/np.sum(M,axis=1,keepdims=True)
+    for i in range(10):
+        M=M/np.sum(M,axis=0,keepdims=True)
+        M=M/np.sum(M,axis=1,keepdims=True)
     return M
     
     
@@ -89,12 +92,12 @@ class circuit:
         self.num_elems = num_elems
         self.architecture = architecture
         self.meas_r = meas_r
-
+        self.classical=0
         """ this need to be updated for different inits"""
 
         if init == "up":
             self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=True
+                "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
             )
         elif init == "upB":
             self.dop = computational_state(
@@ -108,6 +111,9 @@ class circuit:
             
         self.dims = [2] * self.num_elems
         self.gate = gate
+        if self.gate=='markov':
+            self.classical=1
+        self.markov=markov()
 
         self.num_steps = num_steps
         self.step_num = 0
@@ -152,7 +158,7 @@ class circuit:
         if operation == "gates":
             if architecture == "brick":
                 # print(self.step_num)
-                pairs = self.gen_pairs(self.step_num % 2)
+                pairs = self.gen_pairs((self.step_num+1) % 2)
                 step_dct.update({self.gate: pairs})
                 # self.step_num += 1
             if architecture == "stair":
@@ -232,12 +238,11 @@ class circuit:
                 
         elif op =="markov":
             for pair in ps:
-                mat = ikron(markov(), [2] * self.num_elems, pair)
-                # matr = ikron(rightmarkov(),[[]2*self.num_elems,pair])
-                self.dop = np.matmul(qu(self.dop,qtype="bra"),ikron(markov(), [2] * self.num_elems, pair))
-                # self.dop = normalize(self.dop)
-                # self.dop =  qu(circ.dop,qtype="bra")@mat
-                # self.dop.round(4)
+                mat = qu(ikron(markov(), [2] * self.num_elems, pair),qtype="dop")
+                sqrtmat=np.sqrt(mat)
+                D=sqrtmat @ self.dop @ sqrtmat.H
+                self.dop = D/trace(D)
+                self.dop.round(4)
                 
         elif op == "meas":
             for pair in ps:
@@ -245,11 +250,43 @@ class circuit:
 
     def measure(self, ind):
         # self.dop = normalize(self.dop)
+        
+        if not self.classical:
+            a, self.dop = measure(
+                np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
+            )
+        else:
+            a, self.dop = self.class_measure(
+                np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
+            )
+    def class_measure(self,p, A, eigenvalue=None, tol=1e-5):
+        """
+        adapted from quimb package
 
-        a, self.dop = measure(
-            np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
-        )
+        """
+        el, ev = eigh(A)
+        js = np.arange(el.size)
 
+        pj = contract("jk,kl,lj->j", np.sqrt(ev.H), p, np.sqrt(ev)).real
+        # then choose one
+
+        j = np.random.choice(js, p=pj)
+        eigenvalue = el[j]
+
+        # now combine whole eigenspace
+        P = projector((el, ev), eigenvalue=eigenvalue, tol=tol)
+        total_prob = np.sum(pj[abs(el - eigenvalue) < tol])
+
+        # now collapse the state
+        if isvec(p):
+            p_after = P @ (p / total_prob**0.5)
+        else:
+            p_after = (P @ p @ P.H) / total_prob
+        
+        # print(trace(p_after))
+        return eigenvalue, p_after
+
+            
     def mutinfo(self, target=0):
         # this is mem bad
         arr = [
@@ -269,67 +306,20 @@ class circuit:
 
 
 #%%
-numstep = 2*30
-circ = circuit(5, numstep, init="randB", meas_r=0.1, gate="markov",architecture='brick')
+numstep = 2*20
+circ = circuit(8, numstep, init="up", meas_r=0.2, gate="match",architecture='brick')
 #%%
 # for i in range(numstep):
 circ.do_step()
 # circ.print_state()
 # print()
 #%%
-plt.imshow(np.log(np.array(circ.rec_mut_inf).round(3)))
+plt.imshow(np.log(np.array(circ.rec_mut_inf).round(3))[:,1:],extent=(1,circ.num_elems,numstep,0))#,[x for x in range(circ.num_elems)][1:])
+plt.xticks(ticks=[x for x in range(1,circ.num_elems)])
 plt.title("Log Mutual Information site 0")
 plt.ylabel("step number")
 plt.xlabel("site number")
 plt.colorbar()
 #%%
 plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
-
-#%%
-
-
-from opt_einsum import contract
-
-def measure(p, A, eigenvalue=None, tol=1e-12):
-    if isinstance(A, (tuple, list)):
-        el, ev = A
-    else:
-        el, ev = eigh(A)
-
-    js = np.arange(el.size)
-    # print(ev)
-    # compute prob of each eigenvector
-    if isvec(p):
-        print('hey')
-        print(np.sum(ev,axis=1,keepdims=True))
-        print(np.sum(p,axis=0,keepdims=True))
-
-        pj = (abs(ev.H @ p)**2).flatten()
-    else:
-        print('yarg')
-        pj = contract("jk,kl,lj->j", ev.H, p, ev).real
-    
-    print(pj)
-    # then choose one
-    if eigenvalue is None:
-        j = np.random.choice(js, p=pj)
-        eigenvalue = el[j]
-
-    # now combine whole eigenspace
-    P = projector((el, ev), eigenvalue=eigenvalue, tol=tol)
-    total_prob = np.sum(pj[abs(el - eigenvalue) < tol])
-
-    # now collapse the state
-    if isvec(p):
-        p_after = P @ (p / total_prob**0.5)
-    else:
-        p_after = (P @ p @ P.H) / total_prob
-
-    return eigenvalue, p_after
-
-#%%
-dop=circ.dop
-measure(circ.dop,ikron(pauli('Z'),[2]*2,1))
-
-
 
