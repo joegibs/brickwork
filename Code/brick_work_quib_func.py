@@ -70,6 +70,7 @@ class circuit:
         architecture="brick",
         meas_r=0.0,
         target=0,
+        same = 0,
     ):
         """
         num_elems: number of elements in the chain
@@ -95,7 +96,7 @@ class circuit:
             )
         elif init == "upB":
             self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="bra", sparse=False
+                "".join(["0" for x in range(self.num_elems)]), qtype="ket", sparse=False
             )
         elif init == "rand":
             self.dop = rand_product_state(self.num_elems)
@@ -105,6 +106,8 @@ class circuit:
 
         self.dims = [2] * self.num_elems
         self.gate = gate
+        self.same = same
+        
         if self.gate == "markov":
             self.classical = 1
         self.markov = markov()
@@ -116,6 +119,7 @@ class circuit:
 
         self.gen_circ()
         self.step_num = 0
+        self.step_tracker=0
 
         self.target = target
         self.rec_mut_inf = [self.mutinfo(self.target)]
@@ -195,16 +199,29 @@ class circuit:
         return [i for i in range(len(tf)) if tf[i] == 1]
 
     ############     running the circuit       ######################
-    def do_step(self):
+    def do_step(self,num=None):
         # do things
-        for i in self.circ:
-            for j in list(i.keys()):
-                # print(j,i[j])
-                self.do_operation(j, i[j])
-            self.step_num = self.step_num + 1
-
-            # record things
-            self.rec_mut_inf.append(self.mutinfo(self.target))
+        if num == None:
+            for i in self.circ:
+                for j in list(i.keys()):
+                    # print(j,i[j])
+                    self.do_operation(j, i[j])
+                self.step_num = self.step_num + 1
+    
+                # record things
+                self.rec_mut_inf.append(self.mutinfo(self.target))
+        else:
+            self.step_tracker+=num
+            for st,i in enumerate(self.circ):
+                if st>self.step_tracker:
+                    pass
+                for j in list(i.keys()):
+                    # print(j,i[j])
+                    self.do_operation(j, i[j])
+                self.step_num = self.step_num + 1
+    
+                # record things
+                self.rec_mut_inf.append(self.mutinfo(self.target))
 
     def do_operation(self, op, ps):
 
@@ -216,7 +233,6 @@ class circuit:
                 step1 = had @ self.dop @ had.H
                 cn = pkron(CNOT(), [2] * self.num_elems, pair)
                 self.dop = cn @ step1 @ cn.H
-                self.dop.round(4)
 
         elif op == "haar":
             for pair in ps:
@@ -226,22 +242,30 @@ class circuit:
 
         elif op == "match":
             for pair in ps:
-                mat = qu(ikron(rand_match(), [2] * self.num_elems, pair), qtype="dop")
+                mat = qu(ikron(rand_match(), [2] * self.num_elems, pair))
                 self.dop = mat @ self.dop @ mat.H
-                self.dop.round(4)
 
         elif op == "markov":
             for pair in ps:
-                mat = qu(ikron(markov(), [2] * self.num_elems, pair), qtype="dop")
-                sqrtmat = np.sqrt(mat)
-                D = sqrtmat @ self.dop @ sqrtmat.H
-                self.dop = D / trace(D)
-                self.dop.round(4)
+                if self.same: mar=self.markov
+                else: mar = markov()
+                mat = qu(ikron(self.markov, [2] * self.num_elems, pair))
+                self.dop = self.lmc(mat)
+                # self.dop = D / trace(D)
 
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
-
+                
+    def lmc(self, mat):
+        D=np.zeros_like(self.dop)
+        sqrtmat=np.sqrt(mat)
+        for i in np.ndindex(np.shape(mat)):
+            mk = np.zeros_like(mat)
+            mk[i]=sqrtmat[i]
+            D+= mk@ self.dop @qu(mk).H
+        return D/trace(D)
+    
     def measure(self, ind):
         # self.dop = normalize(self.dop)
 
@@ -301,8 +325,8 @@ class circuit:
 
 
 #%%
-numstep = 2 * 20
-circ = circuit(8, numstep, init="up", meas_r=0.2, gate="match", architecture="brick")
+numstep = 1*16
+circ = circuit(6, numstep, init="up", meas_r=0.0, gate="match", architecture="brick",same=1)
 #%%
 # for i in range(numstep):
 circ.do_step()
@@ -319,4 +343,23 @@ plt.ylabel("step number")
 plt.xlabel("site number")
 plt.colorbar()
 #%%
+mat=np.diagonal(circ.dop).real
+plt.bar([x for x in range(mat.size)],mat)
+plt.title("Real part of diagonal")
+
+#%%
 plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
+
+
+#%%
+numstep = 1*10
+circ = circuit(5, numstep, init="up", meas_r=0., gate="match", architecture="brick")
+
+for i in range(1,7):
+    mat=np.diagonal(circ.dop).real
+    plt.subplot(2, 3, i)
+    plt.bar([x for x in range(mat.size)],mat)
+    circ.do_step(num=2)
+    
+
+plt.show()
