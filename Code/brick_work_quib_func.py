@@ -258,6 +258,9 @@ class circuit:
                 self.measure(pair)
                 
     def lmc(self, mat):
+        '''
+        slow
+        '''
         D=np.zeros_like(self.dop)
         sqrtmat=np.sqrt(mat)
         for i in np.ndindex(np.shape(mat)):
@@ -325,8 +328,8 @@ class circuit:
 
 
 #%%
-numstep = 1*16
-circ = circuit(6, numstep, init="up", meas_r=0.0, gate="match", architecture="brick",same=1)
+numstep = 1*11
+circ = circuit(6, numstep, init="up", meas_r=0.0, gate="markov", architecture="brick",same=0)
 #%%
 # for i in range(numstep):
 circ.do_step()
@@ -345,7 +348,7 @@ plt.colorbar()
 #%%
 mat=np.diagonal(circ.dop).real
 plt.bar([x for x in range(mat.size)],mat)
-plt.title("Real part of diagonal")
+plt.title("Real part of Diagonal of rho")
 
 #%%
 plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
@@ -353,7 +356,7 @@ plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
 
 #%%
 numstep = 1*10
-circ = circuit(5, numstep, init="up", meas_r=0., gate="match", architecture="brick")
+circ = circuit(5, numstep, init="up", meas_r=0.5, gate="markov", architecture="brick")
 
 for i in range(1,7):
     mat=np.diagonal(circ.dop).real
