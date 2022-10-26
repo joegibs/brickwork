@@ -10,9 +10,9 @@ TODO:
 """
 
 import itertools
-from operator import add
-from telnetlib import EL
-from tkinter import ARC
+# from operator import add
+# from telnetlib import EL
+# from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
@@ -199,7 +199,7 @@ class circuit:
         return [i for i in range(len(tf)) if tf[i] == 1]
 
     ############     running the circuit       ######################
-    def do_step(self,num=None):
+    def do_step(self,num=None,rec=None):
         # do things
         if num == None:
             for i in self.circ:
@@ -209,7 +209,10 @@ class circuit:
                 self.step_num = self.step_num + 1
     
                 # record things
-                self.rec_mut_inf.append(self.mutinfo(self.target))
+                if rec == 'mut':
+                    self.rec_mut_inf.append(self.mutinfo(self.target))
+                elif rec == 'bip':
+                    self.rec_bip.append(self.bipent())
         else:
             self.step_tracker+=num
             for st,i in enumerate(self.circ):
@@ -221,7 +224,10 @@ class circuit:
                 self.step_num = self.step_num + 1
     
                 # record things
-                self.rec_mut_inf.append(self.mutinfo(self.target))
+                if rec == 'mut':
+                    self.rec_mut_inf.append(self.mutinfo(self.target))
+                elif rec == 'bip':
+                    self.rec_bip.append(self.bipent())
 
     def do_operation(self, op, ps):
 
@@ -320,6 +326,7 @@ class circuit:
             for x in range(np.size(arr))
         ]
         return mi
+    def bipent
         ###############################
 
     def print_state(self):
@@ -329,7 +336,7 @@ class circuit:
 
 #%%
 numstep = 1*11
-circ = circuit(6, numstep, init="up", meas_r=0.0, gate="markov", architecture="brick",same=0)
+circ = circuit(6, numstep, init="up", meas_r=0.2, gate="markov", architecture="brick",same=0)
 #%%
 # for i in range(numstep):
 circ.do_step()
