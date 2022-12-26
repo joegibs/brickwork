@@ -2,10 +2,9 @@
 TODO:
     -better way to visualize
     -markov
-        sumi Mij=1
-        probs dont sum to 1 obvs need to make not densop?
-        dim mismatch if ket, neg probs if skrew it
-    -comments
+        check tailored markov matricies
+    -more commenting
+    -can possibly remove quimb but will need to do some optimizations
 
 """
 
@@ -37,6 +36,8 @@ def markov():
         M = M / np.sum(M, axis=0, keepdims=True)
         M = M / np.sum(M, axis=1, keepdims=True)
     return M
+
+
 # def markov():
 #     # need to check this currently a left matrix....
 #     M = np.array([[1,0,0,0],
@@ -44,6 +45,7 @@ def markov():
 #                   [0,0,0,0],
 #                   [0,0,0,0]])
 #     return M
+
 
 def rand_markov():
     pass
@@ -73,7 +75,7 @@ class circuit:
         architecture="brick",
         meas_r=0.0,
         target=0,
-        same = 0,
+        same=0,
     ):
         """
         num_elems: number of elements in the chain
@@ -103,9 +105,9 @@ class circuit:
             self.dop = computational_state(
                 "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
             )
-        elif 'comp' in init:
+        elif "comp" in init:
             self.dop = computational_state(
-                init.removeprefix('comp'), qtype="dop", sparse=False
+                init.removeprefix("comp"), qtype="dop", sparse=False
             )
         elif init == "upB":
             self.dop = computational_state(
@@ -120,7 +122,7 @@ class circuit:
         self.dims = [2] * self.num_elems
         self.gate = gate
         self.same = same
-        
+
         if self.gate == "markov":
             self.classical = 1
         self.markov = markov()
@@ -132,11 +134,11 @@ class circuit:
 
         self.gen_circ()
         self.step_num = 0
-        self.step_tracker=0
+        self.step_tracker = 0
 
         self.target = target
         self.rec_mut_inf = [self.mutinfo(self.target)]
-        self.rec_bip=[]
+        self.rec_bip = []
 
     ##################   Building the circuit       ###################
 
@@ -213,7 +215,7 @@ class circuit:
         return [i for i in range(len(tf)) if tf[i] == 1]
 
     ############     running the circuit       ######################
-    def do_step(self,num=None,rec=None):
+    def do_step(self, num=None, rec=None):
         """
         tells the circuit to run and record different measures
 
@@ -235,28 +237,28 @@ class circuit:
                     # print(j,i[j])
                     self.do_operation(j, i[j])
                 self.step_num = self.step_num + 1
-    
+
                 # record things
-                if 'mut' in rec:
+                if "mut" in rec:
                     self.rec_mut_inf.append(self.mutinfo(self.target))
-                if 'bip' in rec:
+                if "bip" in rec:
                     self.rec_bip.append(self.bipent())
         else:
-            self.step_tracker+=num
-            for st,i in enumerate(self.circ):
-                if st>self.step_tracker:
+            self.step_tracker += num
+            for st, i in enumerate(self.circ):
+                if st > self.step_tracker:
                     pass
                 for j in list(i.keys()):
                     # print(j,i[j])
                     self.do_operation(j, i[j])
                 self.step_num = self.step_num + 1
-    
+
                 # record things
-                if 'mut' in rec:
+                if "mut" in rec:
                     self.rec_mut_inf.append(self.mutinfo(self.target))
-                if 'bip' in rec:
+                if "bip" in rec:
                     self.rec_bip.append(self.bipent())
-                if 'state' in rec:
+                if "state" in rec:
                     self.plot_state()
 
     def do_operation(self, op, ps):
@@ -283,8 +285,10 @@ class circuit:
 
         elif op == "markov":
             for pair in ps:
-                if self.same: mar=self.markov
-                else: mar = markov()
+                if self.same:
+                    mar = self.markov
+                else:
+                    mar = markov()
                 mat = qu(ikron(self.markov, [2] * self.num_elems, pair))
                 self.dop = self.lmc(mat)
                 # self.dop = D / trace(D)
@@ -292,19 +296,19 @@ class circuit:
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
-                
+
     def lmc(self, mat):
-        '''
+        """
         slow
-        '''
-        D=np.zeros_like(self.dop)
-        sqrtmat=np.sqrt(mat)
+        """
+        D = np.zeros_like(self.dop)
+        sqrtmat = np.sqrt(mat)
         for i in np.ndindex(np.shape(mat)):
             mk = np.zeros_like(mat)
-            mk[i]=sqrtmat[i]
-            D+= mk@ self.dop @qu(mk).H
-        return D/trace(D)
-    
+            mk[i] = sqrtmat[i]
+            D += mk @ self.dop @ qu(mk).H
+        return D / trace(D)
+
     def measure(self, ind):
         # self.dop = normalize(self.dop)
 
@@ -356,31 +360,40 @@ class circuit:
             for x in range(np.size(arr))
         ]
         return mi
+
     def bipent(self):
-        arr = [mutinf_subsys(self.dop, dims=self.dims, sysa=list(range(x)),
-                             sysb=list(range(x,self.num_elems))) 
-               for x in range(self.num_elems)]
+        arr = [
+            mutinf_subsys(
+                self.dop,
+                dims=self.dims,
+                sysa=list(range(x)),
+                sysb=list(range(x, self.num_elems)),
+            )
+            for x in range(self.num_elems)
+        ]
         return arr
         ###############################
 
     def print_state(self):
         for i in range(len(self.dims)):
             print(partial_trace(self.dop, self.dims, [i]))
+
     def plot_state(self):
-        states= [ptr(self.dop,self.dims,x)[0][0] for x in range(self.num_elems)]
+        states = [ptr(self.dop, self.dims, x)[0][0] for x in range(self.num_elems)]
         plt.plot(states)
+
 
 #%%
 numstep = 20
 circ = circuit(5, numstep, init="rand", meas_r=0.1, gate="match", architecture="brick")
 #%%
 # for i in range(numstep):
-circ.do_step(num=numstep,rec='mutbip')
+circ.do_step(num=numstep, rec="mutbip")
 # circ.print_state()
 # print()
 #%%
-for i,x in enumerate(circ.rec_bip):
-    plt.plot(np.array(x)+i)
+for i, x in enumerate(circ.rec_bip):
+    plt.plot(np.array(x) + i)
 plt.title("Log Mutual Information site 0")
 plt.ylabel("step number")
 plt.xlabel("site number")
@@ -395,8 +408,8 @@ plt.ylabel("step number")
 plt.xlabel("site number")
 plt.colorbar()
 #%%
-mat=np.diagonal(circ.dop).real
-plt.bar([x for x in range(mat.size)],mat)
+mat = np.diagonal(circ.dop).real
+plt.bar([x for x in range(mat.size)], mat)
 plt.title("Real part of Diagonal of rho")
 
 #%%
@@ -404,14 +417,14 @@ plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
 
 
 #%%
-numstep = 1*10
+numstep = 1 * 10
 circ = circuit(5, numstep, init="up", meas_r=0.5, gate="markov", architecture="brick")
 
-for i in range(1,7):
-    mat=np.diagonal(circ.dop).real
+for i in range(1, 7):
+    mat = np.diagonal(circ.dop).real
     plt.subplot(2, 3, i)
-    plt.bar([x for x in range(mat.size)],mat)
+    plt.bar([x for x in range(mat.size)], mat)
     circ.do_step(num=2)
-    
+
 
 plt.show()
