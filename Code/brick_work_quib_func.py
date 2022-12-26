@@ -10,9 +10,6 @@ TODO:
 """
 
 import itertools
-# from operator import add
-# from telnetlib import EL
-# from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
@@ -40,13 +37,13 @@ def markov():
         M = M / np.sum(M, axis=0, keepdims=True)
         M = M / np.sum(M, axis=1, keepdims=True)
     return M
-def markov():
-    # need to check this currently a left matrix....
-    M = np.array([[1,0,0,0],
-                  [0,0,0,0],
-                  [0,0,0,0],
-                  [0,0,0,0]])
-    return M
+# def markov():
+#     # need to check this currently a left matrix....
+#     M = np.array([[1,0,0,0],
+#                   [0,0,0,0],
+#                   [0,0,0,0],
+#                   [0,0,0,0]])
+#     return M
 
 def rand_markov():
     pass
@@ -83,7 +80,13 @@ class circuit:
         gate: type of gate used
             -"bell" hadamard then cnot to make a bell state
             -"haar" haar random unitary operators
+            -"match"
+            -"markov"
+             
         init: initialization of qubits
+            -"up" all sites in u state
+            -"comp" comp0101 comp followed by binary string of state
+            -"rand" random init
         
         architecture: arrangement of gates
             -"brick": alternating pairs
@@ -211,6 +214,20 @@ class circuit:
 
     ############     running the circuit       ######################
     def do_step(self,num=None,rec=None):
+        """
+        tells the circuit to run and record different measures
+
+        Parameters
+        ----------
+        num : int, optional
+            number of steps to preform, defaults to evaluating all steps
+        rec : string
+            data to record can be combined
+            -mut : mutual information
+            -bip : bipartite entropy
+            -state : plots partial trace value of the 1 state
+
+        """
         # do things
         if num == None:
             for i in self.circ:
@@ -354,11 +371,11 @@ class circuit:
         plt.plot(states)
 
 #%%
-numstep = 6
-circ = circuit(3, numstep, init="comp001", meas_r=0.0, gate="markov", architecture="brick",same=0)
+numstep = 20
+circ = circuit(5, numstep, init="rand", meas_r=0.1, gate="match", architecture="brick")
 #%%
 # for i in range(numstep):
-circ.do_step(num=numstep,rec='state')
+circ.do_step(num=numstep,rec='mutbip')
 # circ.print_state()
 # print()
 #%%
