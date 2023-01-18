@@ -6,8 +6,8 @@ Created on Mon Sep 19 16:05:17 2022
 """
 import itertools
 from operator import add
-from telnetlib import EL
-from tkinter import ARC
+# from telnetlib import EL
+# from tkinter import ARC
 import numpy as np
 from quimb import *
 import matplotlib.pyplot as plt
@@ -212,8 +212,8 @@ class circuit:
 
 
 #%%
-numstep = 50
-circ = circuit(9, numstep, init="up", meas_r=0.5, gate="markov")
+numstep = 20
+circ = circuit(7, numstep, init="rand", meas_r=0., gate="haar")
 #%%
 # for i in range(numstep):
 circ.do_step()

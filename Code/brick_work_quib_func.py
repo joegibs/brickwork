@@ -139,6 +139,7 @@ class circuit:
         self.target = target
         self.rec_mut_inf = [self.mutinfo(self.target)]
         self.rec_bip = []
+        self.rec_ent = [self.von_ent()]
 
     ##################   Building the circuit       ###################
 
@@ -246,6 +247,7 @@ class circuit:
         else:
             self.step_tracker += num
             for st, i in enumerate(self.circ):
+                # print(st)
                 if st > self.step_tracker:
                     pass
                 for j in list(i.keys()):
@@ -253,13 +255,17 @@ class circuit:
                     self.do_operation(j, i[j])
                 self.step_num = self.step_num + 1
 
-                # record things
-                if "mut" in rec:
-                    self.rec_mut_inf.append(self.mutinfo(self.target))
-                if "bip" in rec:
-                    self.rec_bip.append(self.bipent())
-                if "state" in rec:
-                    self.plot_state()
+                    # record things
+                if "meas" in i.keys():
+                    # print("rec")
+                    if "mut" in rec:
+                        self.rec_mut_inf.append(self.mutinfo(self.target))
+                    if "bip" in rec:
+                        self.rec_bip.append(self.bipent())
+                    if "state" in rec:
+                        self.plot_state()
+                    if "von" in rec:
+                        self.rec_ent.append(self.von_ent())
 
     def do_operation(self, op, ps):
 
@@ -348,7 +354,10 @@ class circuit:
 
         # print(trace(p_after))
         return eigenvalue, p_after
-
+    
+    def von_ent(self):
+        return entropy(self.dop)
+    
     def mutinfo(self, target=0):
         # this is mem bad
         arr = [
@@ -385,10 +394,10 @@ class circuit:
 
 #%%
 numstep = 20
-circ = circuit(5, numstep, init="rand", meas_r=0.1, gate="match", architecture="brick")
+circ = circuit(4, numstep, init="rand", meas_r=0.8, gate="markov", architecture="brick")
 #%%
 # for i in range(numstep):
-circ.do_step(num=numstep, rec="mutbip")
+circ.do_step(num=numstep, rec="mutbipvon")
 # circ.print_state()
 # print()
 #%%
@@ -411,6 +420,19 @@ plt.colorbar()
 mat = np.diagonal(circ.dop).real
 plt.bar([x for x in range(mat.size)], mat)
 plt.title("Real part of Diagonal of rho")
+#%%
+arr=[]
+for i in np.linspace(0,1.0,5):
+    print(i)
+    numstep = 50
+    circ = circuit(6, numstep, init="up", meas_r=float(i), gate="markov", architecture="brick")
+    circ.do_step(num=numstep, rec="von")
+    arr.append(circ.rec_ent)
+#%%
+fig, ax = plt.subplots()
+ax.plot(np.transpose(arr))
+ax.legend(title='meas_r',labels=np.linspace(0,1.0,5))
+plt.show()
 
 #%%
 plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
