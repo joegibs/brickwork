@@ -213,7 +213,7 @@ class circuit:
 
 #%%
 numstep = 20
-circ = circuit(7, numstep, init="rand", meas_r=0., gate="haar")
+circ = circuit(7, numstep, init="up", meas_r=0., gate="match")
 #%%
 # for i in range(numstep):
 circ.do_step()

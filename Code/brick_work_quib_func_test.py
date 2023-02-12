@@ -5,7 +5,6 @@ TODO:
         check tailored markov matricies
     -more commenting
     -can possibly remove quimb but will need to do some optimizations
-
 """
 
 import itertools
@@ -14,6 +13,7 @@ from quimb import *
 import matplotlib.pyplot as plt
 from opt_einsum import contract
 import time
+
 
 #%%
 
@@ -27,6 +27,15 @@ def match(theta, phi):
             [np.sin(theta), 0, 0, np.cos(theta)],
         ]
     )
+def match(theta, phi):
+    return np.array(
+        [
+            [1, 0, 0, 0],
+            [0, 0, 0, 1],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0],
+        ]
+    )
 
 
 def markov():
@@ -37,38 +46,29 @@ def markov():
         M = M / np.sum(M, axis=1, keepdims=True)
     return M
 
-def brentkov():
-    eps=0.1
-    #make identity
-    M=np.identity(4)
-    #subtract small num
-    M=M-np.diag([eps]*4)
-    #add upper diag
-    M=M+np.diag([eps/2]*3,1)+np.diag([eps/2]*3,-1)
-    M[0,3]=eps/2
-    M[3,0]=eps/2
-    return M
-def brentkov():
-    eps=0.1
-    #make identity
-    M=np.identity(4)
-    #subtract small num
-    M=M-np.diag([eps]*4)
-    #add upper diag
-    M=M+np.diag([eps/3]*3,1)+np.diag([eps/3]*3,-1)
-    M=M+np.diag([eps/3]*2,2)+np.diag([eps/3]*2,-2)
-    M[0,3]=eps/3
-    M[3,0]=eps/3
+
+def markov():
+    # need to check this currently a left matrix....
+    M = np.array(
+        [
+            [1, 0, 0, 0],
+            [0, 0, 1, 0],
+            [0, 1, 0, 0],
+            [0, 0, 0, 1],
+        ])
     return M
 
 # def markov():
-#     # need to check this currently a left matrix....
-#     M = np.array([[1,0,0,0],
-#                   [0,0,0,0],
-#                   [0,0,0,0],
-#                   [0,0,0,0]])
+#     eps=0.1
+#     #make identity
+#     M=np.identity(4)
+#     #subtract small num
+#     M=M-np.diag([eps]*4)
+#     #add upper diag
+#     M=M+np.diag([eps/2]*3,1)+np.diag([eps/2]*3,-1)
+#     M[0,3]=eps/2
+#     M[3,0]=eps/2
 #     return M
-
 
 def rand_markov():
     pass
@@ -82,11 +82,9 @@ def rand_match():
 class circuit:
     """
     contains the densop and mixing things
-
     Returns
     -------
     None.
-
     """
 
     def __init__(
@@ -123,35 +121,36 @@ class circuit:
         self.meas_r = meas_r
         self.classical = 0
         """ this need to be updated for different inits"""
-
+        self.gate = gate
+        if self.gate == "markov":
+            self.classical = 1
+            
         if init == "up":
             self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=True
+                "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
             )
         elif "comp" in init:
             self.dop = computational_state(
-                init.removeprefix("comp"), qtype="dop", sparse=True
+                init.removeprefix("comp"), qtype="dop", sparse=False
             )
         elif init == "upB":
             self.dop = computational_state(
-                "".join(["0" for x in range(self.num_elems)]), qtype="ket", sparse=True
+                "".join(["0" for x in range(self.num_elems)]), qtype="ket", sparse=False
             )
         elif init == "rand":
-            self.dop = rand_product_state(self.num_elems)
-            self.dop = qu(self.dop, qtype="dop")
+            if self.classical:
+                self.dop = computational_state(''.join(f'{x}' for x in [np.random.choice([0, 1]) for i in range(num_elems)]),qtype="dop",sparse=False)
+            else:
+                self.dop = rand_product_state(self.num_elems,qtype="dop")
+            
         elif init == "randB":
             self.dop = rand_product_state(self.num_elems)
 
         self.dims = [2] * self.num_elems
-        self.gate = gate
         self.same = same
 
-        if self.gate == "markov":
-            self.classical = 1
-            self.markov = markov()
-        if self.gate == "brentkov":
-            self.classical = 1
-            self.brentkov = brentkov()
+
+        self.markov = markov()
 
         self.num_steps = num_steps
         self.step_num = 0
@@ -165,7 +164,9 @@ class circuit:
         self.target = target
         self.rec_mut_inf = [self.mutinfo(self.target)]
         self.rec_bip = []
-        self.rec_ent = [self.von_ent()]
+        self.rec_ent = [self.ent()]
+        self.rec_ren = [self.ent(alpha=2)]
+        self.rec_half = []
 
     ##################   Building the circuit       ###################
 
@@ -245,7 +246,6 @@ class circuit:
     def do_step(self, num=None, rec=None):
         """
         tells the circuit to run and record different measures
-
         Parameters
         ----------
         num : int, optional
@@ -255,7 +255,6 @@ class circuit:
             -mut : mutual information
             -bip : bipartite entropy
             -state : plots partial trace value of the 1 state
-
         """
         # do things
         if num == None:
@@ -291,7 +290,12 @@ class circuit:
                     if "state" in rec:
                         self.plot_state()
                     if "von" in rec:
-                        self.rec_ent.append(self.von_ent())
+                        self.rec_ent.append(self.ent())
+                    if "reny" in rec:
+                        self.rec_ren.append(self.ent(alpha = 2))
+                    if "halfMI" in rec:
+                        self.rec_half.append(self.bipent(x=int(self.num_elems/2)))
+                        
 
     def do_operation(self, op, ps):
 
@@ -324,14 +328,7 @@ class circuit:
                 mat = qu(ikron(self.markov, [2] * self.num_elems, pair))
                 self.dop = self.lmc(mat)
                 # self.dop = D / trace(D)
-        elif op == "brentkov":
-            for pair in ps:
-                if self.same:
-                    mar = self.brentkov
-                else:
-                    mar = brentkov()
-                mat = qu(ikron(self.brentkov, [2] * self.num_elems, pair),sparse=True)
-                self.dop = self.lmc(mat)
+
         elif op == "meas":
             for pair in ps:
                 self.measure(pair)
@@ -340,21 +337,12 @@ class circuit:
         """
         slow
         """
-        start=time.time()
-        D =computational_state("".join(["1" for x in range(self.num_elems)]), qtype="dop", sparse=True)
-        D[-1,-1]=0
+        D = np.zeros_like(self.dop)
         sqrtmat = np.sqrt(mat)
-        # for i in range(np.shape(mat)[1]):
         for i in np.ndindex(np.shape(mat)):
-            # print(i[0],i[1])
-            if sqrtmat[i]==0:
-                pass
-            mk = computational_state("".join(["1" for x in range(self.num_elems)]), qtype="dop", sparse=True)
-            D[-1,-1]=0
+            mk = np.zeros_like(mat)
             mk[i] = sqrtmat[i]
-            D += qu(mk) @ self.dop @ qu(mk).H
-        end=time.time()
-        print(end-start)
+            D += mk @ self.dop @ qu(mk).H
         return D / trace(D)
 
     def measure(self, ind):
@@ -366,17 +354,16 @@ class circuit:
             )
         else:
             a, self.dop = self.class_measure(
-                qu(self.dop,sparse=False), ikron(pauli("Z"), [2] * self.num_elems, ind)
+                np.array(self.dop), ikron(pauli("Z"), [2] * self.num_elems, ind)
             )
 
     def class_measure(self, p, A, eigenvalue=None, tol=1e-5):
         """
         adapted from quimb package
-
         """
         el, ev = eigh(A)
         js = np.arange(el.size)
-        # print(np.shape(ev),p)
+
         pj = contract("jk,kl,lj->j", np.sqrt(ev.H), p, np.sqrt(ev)).real
         # then choose one
 
@@ -397,9 +384,18 @@ class circuit:
         # print(trace(p_after))
         return eigenvalue, p_after
     
-    def von_ent(self):
-        _,s,_=quimb.linalg.scipy_linalg.svds_scipy(self.dop,k=np.shape(self.dop)[1]-2)
-        return entropy(s)
+    def ent(self, alpha=1):
+        if alpha == 1:
+            return entropy(self.dop)
+        else:
+            a = np.asarray(self.dop)
+            if np.ndim(a) == 1:
+                evals = a
+            else:
+                evals = eigvalsh(a)
+            
+            evals = evals[evals > 0.0]
+            return 1/(1-alpha)*np.log2(sum(evals**alpha))
     
     def mutinfo(self, target=0):
         # this is mem bad
@@ -413,16 +409,25 @@ class circuit:
         ]
         return mi
 
-    def bipent(self):
-        arr = [
-            mutinf_subsys(
-                self.dop,
-                dims=self.dims,
-                sysa=list(range(x)),
-                sysb=list(range(x, self.num_elems)),
-            )
-            for x in range(self.num_elems)
-        ]
+    def bipent(self,x=None):
+        if x is None:
+            arr = [
+                mutinf_subsys(
+                    self.dop,
+                    dims=self.dims,
+                    sysa=list(range(x)),
+                    sysb=list(range(x, self.num_elems)),
+                )
+                for x in range(self.num_elems)
+            ]
+        else:
+            arr = mutinf_subsys(
+                    self.dop,
+                    dims=self.dims,
+                    sysa=list(range(x)),
+                    sysb=list(range(x, self.num_elems)),
+                )
+                
         return arr
         ###############################
 
@@ -433,25 +438,11 @@ class circuit:
     def plot_state(self):
         states = [ptr(self.dop, self.dims, x)[0][0] for x in range(self.num_elems)]
         plt.plot(states)
-#%%
-arr=[]
-start = time.time()
-for i in np.linspace(0,1.0,5):
-    print(i)
-    numstep = 50
-    circ = circuit(5, numstep, init="up", meas_r=float(i), gate="markov", architecture="brick")
-    circ.do_step(num=numstep, rec="von")
-    arr.append(circ.rec_ent)
-end = time.time()
-print(end-start, " Seconds")
-#%%
-fig, ax = plt.subplots()
-ax.plot(np.transpose(arr))
-ax.legend(title='meas_r',labels=np.linspace(0,1.0,5))
-plt.show()
+
+
 #%%
 numstep = 20
-circ = circuit(4, numstep, init="rand", meas_r=0.0, gate="match", architecture="brick")
+circ = circuit(5, numstep, init="rand", meas_r=0.0, gate="match", architecture="brick")
 #%%
 # for i in range(numstep):
 circ.do_step(num=numstep, rec="mutbipvon")
@@ -478,22 +469,84 @@ mat = np.diagonal(circ.dop).real
 plt.bar([x for x in range(mat.size)], mat)
 plt.title("Real part of Diagonal of rho")
 #%%
-arr=[]
-start = time.time()
-for i in np.linspace(0,1.0,5):
+arr_von=[]
+arr_mut=[]
+arr_ren=[]
+interval =np.linspace(0.,1,10) 
+Sites=5
+num_samples = 100
+eps=0.1
+gate="match"
+
+start=time.time()
+for i in interval:
     print(i)
-    numstep = 100
-    circ = circuit(4, numstep, init="up", meas_r=float(i), gate="brentkov", architecture="brick")
-    circ.do_step(num=numstep, rec="von")
-    arr.append(circ.rec_ent)
-end = time.time()
-print(start-end, " Seconds")
+    numstep = 50
+
+    
+    circ = circuit(Sites, numstep, init="up", meas_r=float(i), gate=gate, architecture="brick")
+    circ.do_step(num=numstep, rec="von reny halfMI")
+    data_von = circ.rec_ent
+    data_mut= circ.rec_half
+    data_ren= circ.rec_ren
+    
+    for j in range(1,num_samples):
+        circ = circuit(5, numstep, init="up", meas_r=float(i), gate=gate, architecture="brick")
+        circ.do_step(num=numstep, rec="von reny halfMI")
+        data_von = np.average(np.array([data_von, circ.rec_ent]), axis=0,weights=[j,1] )
+        data_mut = np.average(np.array([data_mut, circ.rec_half]), axis=0,weights=[j,1] )
+        data_ren = np.average(np.array([data_ren, circ.rec_ren]), axis=0,weights=[j,1] )
+
+    arr_von.append(data_von)
+    arr_mut.append(data_mut)
+    arr_ren.append(data_ren)
+end=time.time()
+
 #%%
 fig, ax = plt.subplots()
-ax.plot(np.transpose(arr))
-ax.legend(title='meas_r',labels=np.linspace(0,1.0,5))
-plt.show()
+ax.plot(np.transpose([[arr_mut[i][j] for j in range(0,np.shape(arr_mut)[1],2)] for i in range(np.shape(arr_mut)[0])]))
+ax.legend(title='meas_r',labels=np.round(interval,3))
+plt.title(f"Mut_info, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
 
+plt.show()
+#%%fig, ax = plt.subplots()
+fig, ax = plt.subplots()
+ax.plot(interval,[i[-1] for i in [[arr_mut[i][j] for j in range(0,np.shape(arr_mut)[1],2)] for i in range(np.shape(arr_mut)[0])]])
+ax.set_yscale('log')
+ax.legend(title='meas_p',labels=np.round(interval,3))
+plt.title(f"Mut_info, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()
+#%%
+fig, ax = plt.subplots()
+ax.plot(np.transpose(arr_von))
+ax.legend(title='meas_r',labels=np.round(interval,3))
+plt.title(f"Entropy, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()
+#%%fig, ax = plt.subplots()
+fig, ax = plt.subplots()
+ax.plot(interval,[i[-1] for i in [[arr_von[i][j] for j in range(0,np.shape(arr_mut)[1],2)] for i in range(np.shape(arr_mut)[0])]])
+ax.set_yscale('log')
+ax.legend(title='meas_p',labels=np.round(interval,3))
+plt.title(f"Entropy, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()
+#%%
+fig, ax = plt.subplots()
+ax.plot(np.transpose(arr_ren))
+ax.legend(title='meas_r',labels=np.round(interval,3))
+plt.title(f"Ren_Entropy, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()
+#%%fig, ax = plt.subplots()
+fig, ax = plt.subplots()
+ax.plot(interval,[i[-1] for i in [[arr_ren[i][j] for j in range(0,np.shape(arr_mut)[1],2)] for i in range(np.shape(arr_mut)[0])]])
+ax.set_yscale('log')
+ax.legend(title='meas_p',labels=np.round(interval,3))
+plt.title(f"Ren_entropy, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()
 #%%
 plt.plot(np.nansum(np.log(np.array(circ.rec_mut_inf)), 1))
 
