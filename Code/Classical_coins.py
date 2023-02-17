@@ -177,8 +177,8 @@ class coin_list:
 #4.return same data
 #%%
 test = []
-num_steps=1
-num_coins=1000
+num_steps=30
+num_coins=10000
 num_samples=1
 eps = 0.1
 start=time.time()
