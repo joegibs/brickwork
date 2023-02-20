@@ -3,7 +3,7 @@
 import itertools
 import numpy as np
 from quimb import *
-from quimb.tensor import *
+import quimb.tensor as qtn
 import matplotlib.pyplot as plt
 from opt_einsum import contract
 import time
@@ -18,6 +18,8 @@ def get_arrays(string):
         return rand_uni(4)
     if string=='identity':
         return np.identity(4)
+    if string =='markov':
+        return markov(0.1)
     
 def match(theta, phi):
     return np.array(
@@ -48,27 +50,27 @@ def match(theta, phi):
 #     return M
 
 
-def markov():
-    # need to check this currently a left matrix....
-    M = np.array(
-        [
-            [1, 0, 0, 0],
-            [0, 0, 1, 0],
-            [0, 1, 0, 0],
-            [0, 0, 0, 1],
-        ])
-    return M
+# def markov():
+#     # need to check this currently a left matrix....
+#     M = np.array(
+#         [
+#             [1, 0, 0, 0],
+#             [0, 0, 1, 0],
+#             [0, 1, 0, 0],
+#             [0, 0, 0, 1],
+#         ])
+#     return M
 
-def markov(eps):
-    #make identity
-    M=np.identity(4)
-    #subtract small num
-    M=M-np.diag([eps]*4)
-    #add upper diag
-    M=M+np.diag([eps/2]*3,1)#+np.diag([eps/2]*3,-1)
-    M[0,3]=eps/2
-    M[3,0]=eps/2
-    return M
+# def markov(eps):
+#     #make identity
+#     M=np.identity(4)
+#     #subtract small num
+#     M=M-np.diag([eps]*4)
+#     #add upper diag
+#     M=M+np.diag([eps/2]*3,1)#+np.diag([eps/2]*3,-1)
+#     M[0,3]=eps/2
+#     M[3,0]=eps/2
+#     return M
 def markov(eps):
     # need to check this currently a left matrix....
     M = np.array(
@@ -135,8 +137,8 @@ class circuit:
         """ this need to be updated for different inits"""
         self.gate = gate
 
-        self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
-        self.mps=MPS_computational_state("".join(["0" for x in range(self.num_elems)]))
+        # self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
+        self.mps=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]))
 
         # if init == "up":
         #     self.mps = computational_state(
@@ -179,6 +181,7 @@ class circuit:
         # self.rec_mut_inf = [self.mutinfo(self.target)]
         # self.rec_bip = []
         self.rec_ent = [self.ent()]
+        self.rec_sep_mut=[]
         # self.rec_ren = [self.ent(alpha=2)]
         # self.rec_half = []
 
@@ -303,6 +306,8 @@ class circuit:
                     # print("rec")
                     if "von" in rec:
                         self.rec_ent.append(self.ent())
+        if "sep_mut" in rec:
+            self.rec_sep_mut = self.sep_mut()
                     
 
     def do_operation(self, op, ps):
@@ -312,8 +317,10 @@ class circuit:
         else:
             pairs = [tuple(i) for i in ps]
             gate=get_arrays(op)
+            # print(gate)
             for pairs in ps:
-                self.mps = gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
+                self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
+                # self.mps.normalize()
         
             
         # Needs some work
@@ -353,6 +360,29 @@ class circuit:
         if alpha == 1:
             return self.mps.entropy(int(self.num_elems/2))
 
+    def sep_mut(self):
+        arr = [
+            mutinf_subsys(
+                self.mps.to_dense(),
+                dims=self.dims,
+                sysa=[1],
+                sysb=[x]
+            )
+            for x in range(2,self.num_elems)
+        ]
+        return arr
+    
+    def polar_mut(self):
+        arr = [
+            mutinf_subsys(
+                self.mps.to_dense(),
+                dims=self.dims,
+                sysa=[1],
+                sysb=[x]
+            )
+            for x in range(2,self.num_elems)
+        ]
+        return arr
     
     def mutinfo(self, target=0):
         # this is mem bad
@@ -397,33 +427,33 @@ class circuit:
         plt.plot(states)
 
 
-#%%
+# #%%
 
-arr_vonq=[]
+# arr_vonq=[]
 
-interval =[0]#np.linspace(0.,0.3,4) 
-Sites=5
-num_samples = 100
-eps=0.1
-gate="2haar"
+# interval =[0]#np.linspace(0.,0.3,4) 
+# Sites=5
+# num_samples = 100
+# eps=0.1
+# gate="2haar"
 
-start=time.time()
-for i in interval:
-    print(i)
-    numstep = 50
+# start=time.time()
+# for i in interval:
+#     print(i)
+#     numstep = 50
 
     
-    circ = circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
-    circ.do_step(num=numstep, rec="von")
-    data_von = circ.rec_ent
+#     circ = circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
+#     circ.do_step(num=numstep, rec="von")
+#     data_von = circ.rec_ent
     
-    for j in range(1,num_samples):
-        circ = circuit(5, numstep, meas_r=float(i), gate=gate, architecture="brick")
-        circ.do_step(num=numstep, rec="von")
-        data_von = np.average(np.array([data_von, circ.rec_ent]), axis=0,weights=[j,1] )
+#     for j in range(1,num_samples):
+#         circ = circuit(5, numstep, meas_r=float(i), gate=gate, architecture="brick")
+#         circ.do_step(num=numstep, rec="von")
+#         data_von = np.average(np.array([data_von, circ.rec_ent]), axis=0,weights=[j,1] )
 
-    arr_vonq.append(data_von)
-end=time.time()
+#     arr_vonq.append(data_von)
+# end=time.time()
 
 
 #%%
