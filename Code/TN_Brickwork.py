@@ -53,7 +53,7 @@ class Circuit:
     def __init__(self, N=10, max_chi = None,
                 init_state = 'zero', c_center=None):
         self.N = N
-        if max_chi == None: max_chi = 2**(N//2)
+        if max_chi == None: self.max_chi = 2**(N//2)
         else: self.max_chi = max_chi
         self.init_state = init_state
         self.Psi = [0 for x in range(N)]
@@ -102,9 +102,12 @@ class Circuit:
         psi_m = self.Psi[site].reshape(d1*d2, d3)
         u, d, vh = LA.svd(psi_m)
         d = self.trun_d(d)
-        self.Psi[site] = u[:,np.arange(0,len(d),1)].reshape(d1,d2,d3)
-        psi_mp = np.diag(d) @ vh @ self.Psi[site+1].reshape(d1p, d2p*d3p) / LA.norm(d)
-        self.Psi[site+1] = psi_mp.reshape(d1p, d2p, d3p)
+        self.Psi[site] = u[:,np.arange(0,len(d),1)].reshape(d1,d2,len(d))
+        #self.Psi[site] = u[:,np.arange(0,len(d),1)].reshape(d1,d2,d3)
+        #psi_mp = np.diag(d) @ vh @ self.Psi[site+1].reshape(d1p, d2p*d3p) / LA.norm(d)
+        psi_mp = np.diag(d) @ vh[np.arange(0,len(d),1)] @ self.Psi[site+1].reshape(d1p, d2p*d3p) / LA.norm(d)
+        #self.Psi[site+1] = psi_mp.reshape(d1p, d2p, d3p)
+        self.Psi[site+1] = psi_mp.reshape(len(d), d2p, d3p)
         
     def right_canonize(self, site):
         """
@@ -288,7 +291,7 @@ def get_layers(j, N):
     return dqg, sqg
                  
         
-def exp(N, m_rate, layers):
+def exp(N, m_rate, layers, init_state='zero'):
     """
     Initializes and runs hybrid circuit of determined size, with 
     a measurement rate and set amount of layers
@@ -309,10 +312,11 @@ def exp(N, m_rate, layers):
 
     """
     
-    circ = Circuit(N, init_state='zero')
+    circ = Circuit(N, init_state)
     circ.init_Circuit()
     ev_layer_d, ev_layer_s = get_layers(0, N)
     odd_layer_d, odd_layer_s = get_layers(1, N)
+    bd_l = np.arange(0, layers, 1)
     for j in range(layers):
         if j % 2 == 0:
             sl, dl = ev_layer_s, ev_layer_d
@@ -326,8 +330,26 @@ def exp(N, m_rate, layers):
             for q in range(N):
                 if np.random.rand() < m_rate:
                     circ.meas_qbit(q)
+        circ.canonize_psi()
+        m = 0
+        for t in circ.Psi:
+            if t.shape[2] > m:
+                m = t.shape[2]
+        bd_l[j] = m
+        
                     
-    return circ
+    return circ, bd_l
 #%%
 #Testing time
-circ = exp(4,0.2,3)
+layers=6
+bdl = np.arange(0, layers, 1)
+for mr in np.array([0, 0.05, 0.1, 0.17, 0.22, 0.3]):
+    for j in range(1000):
+        circ, bd_l = exp(10,mr,layers); #bd_l = np.log(bd_l)
+        bdl = bdl + bd_l
+    bdl = bdl / 100
+    plt.plot(np.arange(0,layers,1), np.log(bdl))
+#plt.show()
+#%%
+#Testing of Markov Matrix
+p = np.kron([0.4,0.6],[0.3,0.7]); p = np.kron(p, [0.1,0.9])
