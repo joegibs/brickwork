@@ -49,6 +49,15 @@ def make_unitary(dim, simmean, simwidth):
     U = Q @ Etta
     return U
 
+def kron_all(l):
+    
+    for j in range(len(l)):
+        if j == 0:
+            k_l = l[j]
+        else:
+            k_l = np.kron(k_l, l[j])
+    return k_l
+
 class Density_Circ:
     
     def __init__(self, N, layers, m_rate, init_state = 'zero'):
@@ -59,6 +68,7 @@ class Density_Circ:
         self.rho = self.init_density(init_state)
         self.gates = self.make_gates()
         self.ms = self.make_measures()
+        self.projs = self.make_projectors()
         
     def init_density(self, init_state):
         
@@ -106,3 +116,29 @@ class Density_Circ:
                     m_l.append(s)
             ms[k] = m_l
         return ms
+    
+    def make_projectors(self):
+        proj_l = [[0 for k in range(2**self.N)] for j in range(self.N)]
+        for j in range(self.N):
+            jump = 2**(j+1)
+            for j in range(self.N//jump):
+                proj_l[j][j: j+jump] = np.full(jump//2, 1)
+    
+    def Execute_Circuit(self):
+        
+        for l in self.layers:
+            u = kron_all(self.gates)
+            self.rho = u @ self.rho @ cc(u)
+            for j in self.ms[l]:
+                pass
+#%%
+def make_measures(self):
+    
+    ms = [0 for j in range(self.layers)]
+    for k in range(self.layers):
+        m_l = []
+        for s in range(self.N):
+            if self.m_rate > np.random.rand():
+                m_l.append(s)
+        ms[k] = m_l
+    return ms
