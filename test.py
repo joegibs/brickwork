@@ -11,11 +11,11 @@ from tqdm import tqdm
 arr_vonq=[]
 arr_sep_mut=[]
 
-interval =np.linspace(0.1,0.5,4) 
-Sites=5
-num_samples = 50
+interval =np.linspace(0.0,0.5,8) 
+Sites=15
+num_samples = 1000
 eps=0.1
-gate="markov"
+gate="2haar"
 
 start=time.time()
 for i in tqdm(interval):
@@ -39,7 +39,7 @@ for i in tqdm(interval):
     arr_vonq.append(data_von)
     arr_sep_mut.append(data_sep_mut)
 end=time.time()
-#%%
+#%% Mut inf at ends
 fig, ax = plt.subplots()
 ax.plot(np.transpose(arr_sep_mut))
 
@@ -48,7 +48,7 @@ plt.title(f"Mut_info, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={n
 ax.set_yscale('log')
 
 plt.show()
-#%%
+#%% bipartite entropy
 
 fig, ax = plt.subplots()
 ax.plot(np.arange(0,np.shape(arr_vonq)[1]-1,2),np.transpose([[(arr_vonq[i][j]+arr_vonq[i][j+1])/2 for j in range(0,np.shape(arr_vonq)[1]-1,2)] for i in range(np.shape(arr_vonq)[0])]))

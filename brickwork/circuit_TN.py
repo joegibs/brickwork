@@ -4,6 +4,8 @@ import itertools
 import numpy as np
 from quimb import *
 import quimb.tensor as qtn
+from quimb.utils import int2tup
+from quimb.calc import check_dims_and_indices
 import matplotlib.pyplot as plt
 from opt_einsum import contract
 import time
@@ -104,9 +106,10 @@ class circuit:
         self,
         num_elems,
         num_steps,
-        gate="bell",
+        gate="2haar",
         init="up",
         architecture="brick",
+        bc="periodic",
         meas_r: float=0.0,
         target=0,
         same=0,
@@ -132,6 +135,7 @@ class circuit:
 
         self.num_elems = num_elems
         self.architecture = architecture
+        self.boundary_conditions=bc
         self.meas_r = float(meas_r)
         self.eps = eps
         """ this need to be updated for different inits"""
@@ -182,6 +186,7 @@ class circuit:
         # self.rec_bip = []
         self.rec_ent = [self.ent()]
         self.rec_sep_mut=[]
+        self.rec_tri_mut=[]
         # self.rec_ren = [self.ent(alpha=2)]
         # self.rec_half = []
 
@@ -196,7 +201,8 @@ class circuit:
         """
         self.circ = []
         # call some generating thing
-        for i in range(self.num_steps):
+        i=0
+        while self.step_num<self.num_steps:
             """
             force every other to be a meas
             """
@@ -205,6 +211,7 @@ class circuit:
             if i % 2 == 1:
                 self.circ.append(self.gen_step("meas", self.meas_r))
                 self.step_num += 1
+            i+=1
 
 
     def gen_step(self, operation: str, architecture: str):
@@ -218,7 +225,6 @@ class circuit:
 
         if operation == "gates":
             if architecture == "brick":
-                # print(self.step_num)
                 pairs = self.gen_pairs((self.step_num + 1) % 2)
                 step_dct.update({self.gate: pairs})
                 
@@ -232,6 +238,7 @@ class circuit:
                 pairs = self.gen_rand_meas()
                 step_dct.update({"meas": pairs})
             else:
+                print("HET")
                 pass
         return step_dct
 
@@ -246,6 +253,9 @@ class circuit:
         while i + 2 <= self.num_elems:
             pairs.append([i, i + 1])
             i = i + 2
+        if self.boundary_conditions == "periodic":
+            if not eoo and not self.num_elems%2:
+                pairs.append([self.num_elems-1,0])
         return pairs
 
     def gen_staircase(self):
@@ -308,6 +318,8 @@ class circuit:
                         self.rec_ent.append(self.ent())
         if "sep_mut" in rec:
             self.rec_sep_mut = self.sep_mut()
+        if "tri_mut" in rec:
+            self.rec_tri_mut = self.tripartite_mut()
                     
 
     def do_operation(self, op, ps):
@@ -321,7 +333,7 @@ class circuit:
             for pairs in ps:
                 self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
                 # self.mps.normalize()
-        
+            
             
         # Needs some work
         # if op == "bell":
@@ -416,6 +428,11 @@ class circuit:
                 )
                 
         return arr
+    
+    def tripartite_mut(self):
+        elems=np.arange(0,self.num_elems)
+        arr= np.array_split(elems,4)
+        return tri_mutinf_subsys(self.mps.to_dense(),self.dims,arr[0],arr[1],arr[2])
         ###############################
 
     def print_state(self):
@@ -425,7 +442,64 @@ class circuit:
     def plot_state(self):
         states = [ptr(self.mps, self.dims, x)[0][0] for x in range(self.num_elems)]
         plt.plot(states)
+#%%
+def tri_mutinf_subsys(
+    psi_abc, dims, sysa, sysb, sysc, approx_thresh=2**13, **approx_opts
+):
+    """Calculate the mutual information of two subsystems of a pure state,
+    possibly using an approximate lanczos method for large subsytems.
+    Parameters
+    ----------
+    psi_abc : vector
+        Tri-partite pure state.
+    dims : sequence of int
+        The sub dimensions of the state.
+    sysa : sequence of int
+        The index(es) of the subsystem(s) to consider part of 'A'.
+    sysb : sequence of int
+        The index(es) of the subsystem(s) to consider part of 'B'.
+    approx_thresh : int, optional
+        The size of subsystem at which to switch to the approximate lanczos
+        method. Set to ``None`` to never use the approximation.
+    approx_opts
+        Supplied to :func:`entropy_subsys_approx`, if used.
+    Returns
+    -------
+    float
+        The mutual information.
+    See Also
+    --------
+    mutinf, entropy_subsys, entropy_subsys_approx, logneg_subsys
+    """
+    sysa, sysb, sysc = int2tup(sysa), int2tup(sysb), int2tup(sysc)
 
+    check_dims_and_indices(dims, sysa, sysb, sysc)
+
+    sz_a = prod(d for i, d in enumerate(dims) if i in sysa)
+    sz_b = prod(d for i, d in enumerate(dims) if i in sysb)
+    sz_c = prod(d for i, d in enumerate(dims) if i in sysc)
+
+    sz_d = prod(dims) // (sz_a * sz_b * sz_b)
+
+    kws = {"approx_thresh": approx_thresh, **approx_opts}
+
+    #possible bug case
+    # if sz_d == 1:
+    #     hab = 0.0
+    #     ha = hb = entropy_subsys(psi_abc, dims, sysa, **kws)
+    # else:
+    hab = entropy_subsys(psi_abc, dims, sysa + sysb, **kws)
+    hac = entropy_subsys(psi_abc, dims, sysa + sysc, **kws)
+    hbc = entropy_subsys(psi_abc, dims, sysc + sysb, **kws)
+    
+    habc = entropy_subsys(psi_abc, dims, sysa + sysb+ sysc, **kws)
+
+    ha = entropy_subsys(psi_abc, dims, sysa, **kws)
+    hb = entropy_subsys(psi_abc, dims, sysb, **kws)
+    hc = entropy_subsys(psi_abc, dims, sysb, **kws)
+
+
+    return hb + ha - hab - hac - hbc + habc
 
 # #%%
 
