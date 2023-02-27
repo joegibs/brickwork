@@ -11,9 +11,9 @@ from tqdm import tqdm
 arr_vonq=[]
 arr_sep_mut=[]
 
-interval =np.linspace(0.0,0.5,8) 
-Sites=15
-num_samples = 1000
+interval =np.linspace(0.0,0.5,20) 
+Sites=6
+num_samples = 1
 eps=0.1
 gate="2haar"
 
@@ -29,7 +29,7 @@ for i in tqdm(interval):
     data_sep_mut = circ.rec_sep_mut
     
     for j in range(1,num_samples):
-        print("j: ",j)
+        # print("j: ",j)
         circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
         circ.do_step(num=numstep, rec="von sep_mut")
         data_von = np.average(np.array([data_von, circ.rec_ent]), axis=0,weights=[j,1] )
@@ -58,3 +58,5 @@ plt.title(f"Mut_info, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={n
 # ax.set_yscale('log')
 
 plt.show()
+
+#%%

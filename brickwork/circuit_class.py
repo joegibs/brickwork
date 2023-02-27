@@ -304,7 +304,7 @@ class circuit:
             
             el, ev = eigh(A)
             js = np.arange(el.size)
-            pj = p.flatten()
+            pj = ev.T@p.flatten()
             # then choose one
             j = np.random.choice(js, p=pj)
             eigenvalue = el[j]
@@ -315,15 +315,16 @@ class circuit:
 
             total_prob = np.sum(P@p).real
             # print("@@@tot_prob : ",total_prob)
-            if total_prob == 0:
-                return
-            arr = qu((P@p/total_prob),sparse=False,qtype='ket')
+            # if total_prob == 0:
+            #     #bad
+            #     return
+            arr = qu((P@p/total_prob),sparse=True,qtype='ket')
             self.old_mps = self.mps
             self.mps = arr
         
     def ent(self, alpha=1):
         if alpha == 1:
-            return entropy_subsys(qu(self.mps,sparse=False),dims=[2]*self.num_elems,sysa=[i for i in range(int(self.num_elems/2))])
+            return entropy_subsys(qu(self.mps,sparse=False),dims=self.dims,sysa=[i for i in range(int(self.num_elems/2))])
 
     def sep_mut(self):
         arr = [

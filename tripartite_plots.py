@@ -9,14 +9,14 @@ from tqdm import tqdm
 
 #%%
 tot_tri = []
-sits =[4,6,8]
+sits =[6]#,6,8,10]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
     arr_tri_mut = []
     
     interval =np.linspace(0.0,1,8) 
-    num_samples = 10
+    num_samples = 20
     eps=0.1
     gate="markov"
     
@@ -48,7 +48,7 @@ for Sites in sits:
     tot_tri.append(arr_tri_mut)
 #%% Mut inf at ends
 sits=[16,8,12]
-sits=[4,6,8]
+sits=[4,6,8,10]
 fig, ax = plt.subplots()
 for tri in tot_tri:
     ax.plot(interval,tri)
