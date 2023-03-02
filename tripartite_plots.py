@@ -1,5 +1,5 @@
 import brickwork.circuit_TN as bc
-import brickwork.circuit_class as bc
+# import brickwork.circuit_class as bc
 
 
 import numpy as np
@@ -9,16 +9,16 @@ from tqdm import tqdm
 
 #%%
 tot_tri = []
-sits =[6]#,6,8,10]
+sits =[6,8,10]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
     arr_tri_mut = []
     
-    interval =np.linspace(0.0,1,8) 
+    interval =np.linspace(0.1,2,8) 
     num_samples = 20
     eps=0.1
-    gate="markov"
+    gate="2haar"
     
     start=time.time()
     for i in tqdm(interval):

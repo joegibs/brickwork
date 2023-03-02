@@ -11,15 +11,20 @@ import time
 
 #%%
 
-def get_arrays(string):
+def get_arrays(string,eps=0.1):
     if string=='match':
         return rand_match()
-    if string=='2haar':
-        return rand_uni(4)
+    # if string=='2haar':
+    #     return rand_uni(4)
     if string=='identity':
         return np.identity(4)
     if string =='markov':
         return markov(0.1)
+    if string =="IorCNOT":
+        #permutation marticies dont generate ent
+        return IorCNOT(0.5)
+    if string == "IX":
+        return IX(eps)
     
 def match(theta, phi):
     return np.array(
@@ -32,6 +37,15 @@ def match(theta, phi):
     )
 def markov(eps):
     # need to check this currently a left matrix....
+    M = np.random.randint(0,high=10,size=(4, 4))
+    for i in range(15):
+        M = M / np.sum(M, axis=0, keepdims=True)
+        # M = M / np.sum(M, axis=1, keepdims=True)
+    if np.isnan(np.min(M)):
+        M=markov(eps)
+    return M
+def markove(eps):
+    # need to check this currently a left matrix....
     M = np.array(
         [
             [1-eps, 0, 0, eps],
@@ -40,17 +54,19 @@ def markov(eps):
             [eps, 0, 0, 1-eps],
         ])
     return M
-def rand_markov():
-    pass
-
+def IorCNOT(eps):
+    pj = [1-eps,eps]
+    js = [np.identity(4),kron(pauli('X'),pauli("X"))]
+    return js[np.random.choice([0,1], p=pj)]
+def IX(eps):
+    M = (1-eps)*np.identity(4) + eps*kron(pauli("X"),pauli("X"))
+    return M
 
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
     return match(arr[0]/2, arr[1]/2)
-# def rand_match():
-#     arr = 2 * np.pi * np.random.rand(2)
-#     return match(2 * np.pi *0.4, 2 * np.pi *0.1)
 
+#%%
 class circuit:
     """
     contains the densop and mixing things
@@ -246,7 +262,6 @@ class circuit:
         if num == None:
             for i in self.circ:
                 for j in list(i.keys()):
-                    # print(j,i[j])
                     self.do_operation(j, i[j])
                 self.step_num = self.step_num + 1
 
@@ -260,7 +275,6 @@ class circuit:
         else:
             self.step_tracker += num
             for st, i in enumerate(self.circ):
-                # print(st)
                 if st > self.step_tracker:
                     pass
                 for j in list(i.keys()):
@@ -306,6 +320,9 @@ class circuit:
             js = np.arange(el.size)
             pj = ev.T@p.flatten()
             # then choose one
+            # pj = pj/sum(pj)
+            # print(sum(pj))
+            
             j = np.random.choice(js, p=pj)
             eigenvalue = el[j]
 

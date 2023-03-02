@@ -9,19 +9,23 @@ from quimb.calc import check_dims_and_indices
 import matplotlib.pyplot as plt
 from opt_einsum import contract
 import time
+from autoray import do, dag, reshape, conj, get_dtype_name, transpose
 
 
 #%%
 
-def get_arrays(string):
+def get_arrays(string,eps=0.3):
     if string=='match':
         return rand_match()
     if string=='2haar':
         return rand_uni(4)
     if string=='identity':
         return np.identity(4)
-    if string =='markov':
-        return markov(0.1)
+    if string =="IorCNOT":
+        #permutation marticies dont generate ent
+        return IorCNOT(0.5)
+    if string == "IX":
+        return qu(IX(eps))
     
 def match(theta, phi):
     return np.array(
@@ -32,60 +36,6 @@ def match(theta, phi):
             [np.sin(theta), 0, 0, np.cos(theta)],
         ]
     )
-# def match(theta, phi):
-#     return np.array(
-#         [
-#             [1, 0, 0, 0],
-#             [0, 0, 1, 0],
-#             [0, 1, 0, 0],
-#             [0, 0, 0, 1],
-#         ]
-#     )
-
-
-# def markov():
-#     # need to check this currently a left matrix....
-#     M = np.random.rand(4, 4)
-#     for i in range(10):
-#         M = M / np.sum(M, axis=0, keepdims=True)
-#         M = M / np.sum(M, axis=1, keepdims=True)
-#     return M
-
-
-# def markov():
-#     # need to check this currently a left matrix....
-#     M = np.array(
-#         [
-#             [1, 0, 0, 0],
-#             [0, 0, 1, 0],
-#             [0, 1, 0, 0],
-#             [0, 0, 0, 1],
-#         ])
-#     return M
-
-# def markov(eps):
-#     #make identity
-#     M=np.identity(4)
-#     #subtract small num
-#     M=M-np.diag([eps]*4)
-#     #add upper diag
-#     M=M+np.diag([eps/2]*3,1)#+np.diag([eps/2]*3,-1)
-#     M[0,3]=eps/2
-#     M[3,0]=eps/2
-#     return M
-def markov(eps):
-    # need to check this currently a left matrix....
-    M = np.array(
-        [
-            [1-eps, 0, 0, eps],
-            [0, 1-eps, eps, 0],
-            [0, eps, 1-eps, 0],
-            [eps, 0, 0, 1-eps],
-        ])
-    return M
-def rand_markov():
-    pass
-
 
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
@@ -93,6 +43,22 @@ def rand_match():
 # def rand_match():
 #     arr = 2 * np.pi * np.random.rand(2)
 #     return match(2 * np.pi *0.4, 2 * np.pi *0.1)
+def IorCNOT(eps):
+    pj = [1-eps,eps]
+    js = [np.identity(4),CNOT()]
+    return js[np.random.choice([0,1], p=pj)]
+# def IX(eps):
+#     M = np.sqrt((1-eps))*np.identity(4) + 1j* np.sqrt(eps)*kron(pauli("Y"),pauli("Y"))
+#     return M
+def IX(phi):
+    return np.array(
+        [
+            [np.cos(phi/2), 0, 0, -1j*np.sin(phi/2)],
+            [0, np.cos(phi/2), -1j*np.sin(phi/2), 0],
+            [0, -1j*np.sin(phi/2), np.cos(phi/2), 0],
+            [-1j*np.sin(phi/2), 0, 0, np.cos(phi/2)],
+        ]
+    )
 
 class circuit:
     """
@@ -142,7 +108,11 @@ class circuit:
         self.gate = gate
 
         # self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
-        self.mps=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]))
+        if bc == "periodic":
+            cyclic = True
+        else:
+            cyclic = False
+        self.mps=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]),cyclic=False)
 
         # if init == "up":
         #     self.mps = computational_state(
@@ -169,7 +139,6 @@ class circuit:
         self.same = same
 
 
-        self.markov = markov(self.eps)
         self.match = rand_match()
 
         self.num_steps = num_steps
@@ -327,13 +296,20 @@ class circuit:
             for pairs in ps:
                 self.measure(pairs)
         else:
-            pairs = [tuple(i) for i in ps]
+            # pairs = [tuple(i) for i in ps]
             gate=get_arrays(op)
             # print(gate)
+            # print(ps)
             for pairs in ps:
-                self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
+                # print(self.mps.norm())
+                # self.old_mps = self.mps
+                # print(gate, tuple(pairs))
+                if pairs[1] ==0:
+                    # print(pairs)
+                    self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
+                else:
+                    self.mps.gate(gate,pairs,contract='swap+split',inplace=True)
                 # self.mps.normalize()
-            
             
         # Needs some work
         # if op == "bell":
@@ -365,13 +341,20 @@ class circuit:
                 
     def measure(self, ind):
         # self.dop = normalize(self.dop)
-
-        a, self.mps = self.mps.measure(ind)
+        # print(ind)
+        try:
+            self.mps.measure(ind,inplace=True)
+        # a, self.mps = cyc_measure(self.mps,ind)
+        except:
+            print("FARTS")
+            pass
     
     def ent(self, alpha=1):
-        if alpha == 1:
+        if not self.mps.cyclic:
             return self.mps.entropy(int(self.num_elems/2))
-
+        else:
+            return cyclic_ent(self.mps,self.dims,[x for x in range(int(self.num_elems/2))], sysb=None)
+            
     def sep_mut(self):
         arr = [
             mutinf_subsys(
@@ -443,6 +426,136 @@ class circuit:
         states = [ptr(self.mps, self.dims, x)[0][0] for x in range(self.num_elems)]
         plt.plot(states)
 #%%
+def cyc_measure(
+        mps,
+        site,
+        remove=False,
+        outcome=None,
+        renorm=True,
+        cur_orthog=None,
+        get=None,
+        inplace=False,
+    ):
+        r"""Measure this MPS at ``site``, including projecting the state.
+        Optionally remove the site afterwards, yielding an MPS with one less
+        site. In either case the orthogonality center of the returned MPS is
+        ``min(site, new_L - 1)``.
+        Parameters
+        ----------
+        site : int
+            The site to measure.
+        remove : bool, optional
+            Whether to remove the site completely after projecting the
+            measurement. If ``True``, sites greater than ``site`` will be
+            retagged and reindex one down, and the MPS will have one less site.
+            E.g::
+                0-1-2-3-4-5-6
+                       / / /  - measure and remove site 3
+                0-1-2-4-5-6
+                              - reindex sites (4, 5, 6) to (3, 4, 5)
+                0-1-2-3-4-5
+        outcome : None or int, optional
+            Specify the desired outcome of the measurement. If ``None``, it
+            will be randomly sampled according to the local density matrix.
+        renorm : bool, optional
+            Whether to renormalize the state post measurement.
+        cur_orthog : None or int, optional
+            If you already know the orthogonality center, you can supply it
+            here for efficiencies sake.
+        get : {None, 'outcome'}, optional
+            If ``'outcome'``, simply return the outcome, and don't perform any
+            projection.
+        inplace : bool, optional
+            Whether to perform the measurement in place or not.
+        Returns
+        -------
+        outcome : int
+            The measurement outcome, drawn from ``range(phys_dim)``.
+        psi : MatrixProductState
+            The measured state, if ``get != 'outcome'``.
+        """
+
+        tn = mps if inplace else mps.copy()
+        L = tn.L
+        d = mps.phys_dim(site)
+
+        # make sure MPS is canonicalized
+        # if cur_orthog is not None:
+        #     tn.shift_orthogonality_center(cur_orthog, site)
+        # else:
+        # locs = [site,np.mod(site+1,mps.num_tensors)]
+        # tn.canonize_cyclic([site,site+1])
+
+        # local tensor and physical dim
+        t = tn[site]
+        ind = tn.site_ind(site)
+
+        # diagonal of reduced density matrix = probs
+        tii = t.contract(t.H, output_inds=(ind,))
+        p = do('real', tii.data)
+        # print(p,sum(p))
+        p=p/sum(p)
+        if outcome is None:
+            # sample an outcome
+            outcome = do('random.choice', do('arange', d, like=p), p=p)
+
+        if get == 'outcome':
+            return outcome
+
+        # project the outcome and renormalize
+        t.isel_({ind: outcome})
+
+        if renorm:
+            t.modify(data=t.data / p[outcome]**0.5)
+
+        if remove:
+            # contract the projected tensor into neighbor
+            if site == L - 1:
+                tn ^= slice(site - 1, site + 1)
+            else:
+                tn ^= slice(site, site + 2)
+
+            # adjust structure for one less spin
+            for i in range(site + 1, L):
+                tn[i].reindex_({tn.site_ind(i): tn.site_ind(i - 1)})
+                tn[i].retag_({tn.site_tag(i): tn.site_tag(i - 1)})
+            tn._L = L - 1
+        else:
+            # simply re-expand tensor dimensions (with zeros)
+            t.new_ind(ind, size=d, axis=-1)
+
+        return outcome, tn
+
+
+def cyclic_ent(ogmps,dims,sysa,sysb=None , **kws):
+    
+    num_elems = len(dims)
+    if sysb is None:
+        sysb = sysb = [i for i in range(num_elems) if i not in sysa]
+        
+    mps = ogmps.copy(deep=True)
+    mpsH = mps.H
+    # mpsH.retag_({'ket': ''})
+    # this automatically reindexes the TN
+    mpsH.site_ind_id = 'b{}'
+
+    # define two subsystems
+    sysa = range(0, int(num_elems/2))
+    sysb = [i for i in range(num_elems) if i not in sysa]
+
+    # join indices for sysb only
+    mps.reindex_sites('dummy_ptr{}', sysb, inplace=True)
+    mpsH.reindex_sites('dummy_ptr{}', sysb, inplace=True)
+
+    rho_ab = (mpsH | mps)
+    rho_ab
+    right_ix = [f'b{i}' for i in sysa]
+    left_ix = [f'k{i}' for i in sysa]
+
+    rho_ab_lo = rho_ab.aslinearoperator(left_ix, right_ix)
+    S_a = - approx_spectral_function(rho_ab_lo, f=xlogx, R=10)
+    return S_a
+
 def tri_mutinf_subsys(
     psi_abc, dims, sysa, sysb, sysc, approx_thresh=2**13, **approx_opts
 ):
@@ -489,14 +602,14 @@ def tri_mutinf_subsys(
     #     ha = hb = entropy_subsys(psi_abc, dims, sysa, **kws)
     # else:
     hab = entropy_subsys(psi_abc, dims, sysa + sysb, **kws)
-    hac = entropy_subsys(psi_abc, dims, sysa + sysc, **kws)
-    hbc = entropy_subsys(psi_abc, dims, sysc + sysb, **kws)
+    hac = entropy_subsys(psi_abc, dims,sysa + sysc, **kws)
+    hbc = entropy_subsys(psi_abc, dims,sysc + sysb, **kws)
     
-    habc = entropy_subsys(psi_abc, dims, sysa + sysb+ sysc, **kws)
+    habc = entropy_subsys(psi_abc, dims,sysa + sysb+ sysc, **kws)
 
-    ha = entropy_subsys(psi_abc, dims, sysa, **kws)
-    hb = entropy_subsys(psi_abc, dims, sysb, **kws)
-    hc = entropy_subsys(psi_abc, dims, sysb, **kws)
+    ha = entropy_subsys(psi_abc, dims,sysa, **kws)
+    hb = entropy_subsys(psi_abc, dims,sysb, **kws)
+    hc = entropy_subsys(psi_abc, dims,sysb, **kws)
 
 
     return hb + ha - hab - hac - hbc + habc
