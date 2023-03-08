@@ -8,6 +8,7 @@ from quimb.utils import int2tup
 from quimb.calc import check_dims_and_indices
 import matplotlib.pyplot as plt
 from opt_einsum import contract
+from copy import deepcopy
 import time
 from autoray import do, dag, reshape, conj, get_dtype_name, transpose
 
@@ -24,9 +25,17 @@ def get_arrays(string,eps=0.3):
     if string =="IorCNOT":
         #permutation marticies dont generate ent
         return IorCNOT(0.5)
-    if string == "IX":
-        return qu(IX(eps))
+    if string == 'rxx':
+        return rand_rxx()
+    if string == 'IX':
+        return rand_IX()
     
+def IX(eps,theta):
+    M = np.exp(1j*theta)*(np.sqrt((1-eps))*np.identity(4) + 1j*np.sqrt(eps)*kron(pauli("X"),pauli("X")))
+    return M
+def rand_IX():
+    return IX(np.random.rand(),2*np.pi*np.random.rand())
+
 def match(theta, phi):
     return np.array(
         [
@@ -34,6 +43,18 @@ def match(theta, phi):
             [0, np.cos(phi), -np.sin(phi), 0],
             [0, np.sin(phi), np.cos(phi), 0],
             [np.sin(theta), 0, 0, np.cos(theta)],
+        ]
+    )
+def rand_rxx():
+    arr = 2 * np.pi * np.random.rand(1)
+    return RXX(arr[0])
+def RXX(theta):
+    return np.array(
+        [
+            [np.cos(theta/2), 0, 0, -1j*np.sin(theta/2)],
+            [0, np.cos(theta/2), -1j*np.sin(theta/2), 0],
+            [0, -1j*np.sin(theta/2), np.cos(theta/2), 0],
+            [-1j*np.sin(theta/2), 0, 0, np.cos(theta/2)],
         ]
     )
 
@@ -50,15 +71,6 @@ def IorCNOT(eps):
 # def IX(eps):
 #     M = np.sqrt((1-eps))*np.identity(4) + 1j* np.sqrt(eps)*kron(pauli("Y"),pauli("Y"))
 #     return M
-def IX(phi):
-    return np.array(
-        [
-            [np.cos(phi/2), 0, 0, -1j*np.sin(phi/2)],
-            [0, np.cos(phi/2), -1j*np.sin(phi/2), 0],
-            [0, -1j*np.sin(phi/2), np.cos(phi/2), 0],
-            [-1j*np.sin(phi/2), 0, 0, np.cos(phi/2)],
-        ]
-    )
 
 class circuit:
     """
@@ -75,7 +87,7 @@ class circuit:
         gate="2haar",
         init="up",
         architecture="brick",
-        bc="periodic",
+        bc="",
         meas_r: float=0.0,
         target=0,
         same=0,
@@ -113,7 +125,7 @@ class circuit:
         else:
             cyclic = False
         self.mps=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]),cyclic=False)
-
+        self.mps = qtn.MPS_rand_state(self.num_elems,5)
         # if init == "up":
         #     self.mps = computational_state(
         #         "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
@@ -223,6 +235,7 @@ class circuit:
             pairs.append([i, i + 1])
             i = i + 2
         if self.boundary_conditions == "periodic":
+            print("hey")
             if not eoo and not self.num_elems%2:
                 pairs.append([self.num_elems-1,0])
         return pairs
@@ -294,21 +307,29 @@ class circuit:
     def do_operation(self, op, ps):
         if op =='meas':
             for pairs in ps:
+                # print(type(pairs))
+                # arr1= self.mps.partial_trace([pairs]).arrays[0]
                 self.measure(pairs)
+                # arr2= self.mps.partial_trace([pairs]).arrays[0]
+                # print(arr1.round(3),arr2.round(3))
+
         else:
             # pairs = [tuple(i) for i in ps]
-            gate=get_arrays(op)
             # print(gate)
             # print(ps)
+            self.old_mps = deepcopy(self.mps)
+            print(self.step_num)
+
             for pairs in ps:
+                gate=get_arrays(op)
                 # print(self.mps.norm())
-                # self.old_mps = self.mps
+                # print(gate)
                 # print(gate, tuple(pairs))
-                if pairs[1] ==0:
-                    # print(pairs)
-                    self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
-                else:
-                    self.mps.gate(gate,pairs,contract='swap+split',inplace=True)
+                # if pairs[1] ==0:
+                #     # print(pairs)
+                #     self.mps = qtn.gate_TN_1D(self.mps,gate,pairs,contract='swap+split')
+                # else:
+                self.mps.gate(gate,pairs,contract='swap+split',inplace=True)
                 # self.mps.normalize()
             
         # Needs some work

@@ -11,7 +11,7 @@ import time
 
 #%%
 
-def get_arrays(string,eps=0.1):
+def get_arrays(string,eps=0.7):
     if string=='match':
         return rand_match()
     # if string=='2haar':
@@ -19,12 +19,12 @@ def get_arrays(string,eps=0.1):
     if string=='identity':
         return np.identity(4)
     if string =='markov':
-        return markov(0.1)
+        return markove(0.1)
     if string =="IorCNOT":
         #permutation marticies dont generate ent
         return IorCNOT(0.5)
     if string == "IX":
-        return IX(eps)
+        return rand_IX()
     
 def match(theta, phi):
     return np.array(
@@ -61,7 +61,8 @@ def IorCNOT(eps):
 def IX(eps):
     M = (1-eps)*np.identity(4) + eps*kron(pauli("X"),pauli("X"))
     return M
-
+def rand_IX():
+    return IX(np.random.rand())
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
     return match(arr[0]/2, arr[1]/2)
