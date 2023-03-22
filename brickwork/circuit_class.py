@@ -19,7 +19,7 @@ def get_arrays(string,eps=0.7):
     if string=='identity':
         return np.identity(4)
     if string =='markov':
-        return markove(0.1)
+        return markov(0.1)
     if string =="IorCNOT":
         #permutation marticies dont generate ent
         return IorCNOT(0.5)
@@ -62,7 +62,7 @@ def IX(eps):
     M = (1-eps)*np.identity(4) + eps*kron(pauli("X"),pauli("X"))
     return M
 def rand_IX():
-    return IX(np.random.rand())
+    return IX(0.9)#np.random.rand())
 def rand_match():
     arr = 2 * np.pi * np.random.rand(2)
     return match(arr[0]/2, arr[1]/2)

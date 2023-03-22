@@ -1,5 +1,5 @@
 import brickwork.circuit_TN as bc
-# import brickwork.circuit_class as bc
+import brickwork.circuit_class as bc
 
 
 import numpy as np
@@ -9,27 +9,30 @@ from tqdm import tqdm
 
 #%%
 tot_tri = []
-sits =[8]
+tot_vonq = []
+#%%
+sits =[4,6,8]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
     arr_tri_mut = []
 
     
-    interval =[0.2]#np.linspace(0.,1,6) 
+    interval =np.linspace(0.,1,8) 
     num_samples = 50
     eps=0.1
     gate="IX"
     
     start=time.time()
-    for i in interval:
-        print(i)
+    for i in tqdm(interval):
+        # print(i)
         numstep = 4*Sites
     
         
         circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
         circ.do_step(num=numstep, rec="von tri_mut sep_mut")
-        data_von = circ.rec_ent
+        vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
+        data_von = vonq_avg
         data_sep_mut = circ.rec_sep_mut
         data_tri_mut = circ.rec_tri_mut
         
@@ -37,15 +40,17 @@ for Sites in sits:
             # print("j: ",j)
             circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
             circ.do_step(num=numstep, rec="von tri_mut sep_mut")
-            data_von = np.average(np.array([data_von, circ.rec_ent]), axis=0,weights=[j,1] )
+            vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
+            data_von = np.average(np.array([data_von, vonq_avg]), axis=0,weights=[j,1] )
             data_sep_mut = np.average(np.array([data_sep_mut, circ.rec_sep_mut]),axis=0, weights=[j,1] )
             data_tri_mut = np.average(np.array([data_tri_mut, circ.rec_tri_mut]),axis=0, weights=[j,1] )
     
-    
+        
         arr_vonq.append(data_von)
         arr_sep_mut.append(data_sep_mut)
         arr_tri_mut.append(data_tri_mut)
     end=time.time()
+    tot_vonq.append([x[-1] for x in arr_vonq])
     tot_tri.append(arr_tri_mut)
 #%% Mut inf at ends
 sits=[8,16,8,12]
@@ -85,4 +90,16 @@ plt.title(f"Mut_info, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={n
 ax.set_yscale('log')
 
 plt.show()
+#%%
+sits=[4,6,8,4,6,8,4,6,8]
+# sits=[0.1,0.5,0.01,0.05,0.025,0.015,0.3,0.9,0.7]
+fig, ax = plt.subplots()
+for tri in tot_vonq:
+    ax.plot(interval,tri)
 
+
+ax.legend(title='length',labels=sits)
+plt.title(f"Bip_ent, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}")
+# ax.set_yscale('log')
+
+plt.show()

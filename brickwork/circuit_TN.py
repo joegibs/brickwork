@@ -318,7 +318,7 @@ class circuit:
             # print(gate)
             # print(ps)
             self.old_mps = deepcopy(self.mps)
-            print(self.step_num)
+            # print(self.step_num)
 
             for pairs in ps:
                 gate=get_arrays(op)

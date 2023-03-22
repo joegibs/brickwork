@@ -66,13 +66,13 @@ def oz():
 #%%
 thetas = np.array([])
 eigens = np.array([])
-for i in range(100):
-    mat = oz()
+for i in range(10000):
+    mat = rand_IX_q()
     d, u = np.linalg.eig(mat)
     sort_d = np.sort(d)
-    # theta_d = np.arctan2(sort_d.real,sort_d.imag)
+    theta_d = np.arctan2(sort_d.real,sort_d.imag)
     # thetas =np.concatenate((thetas,theta_d))
     eigens = np.concatenate((eigens,sort_d))
 # plt.plot(thetas)
-# plt.hist(thetas,bins=30,density=True)
-plt.hist(eigens,density=True)
+plt.hist(thetas,bins=30,density=True)
+# plt.hist(eigens,density=True)
