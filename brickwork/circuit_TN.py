@@ -29,7 +29,22 @@ def get_arrays(string,eps=0.3):
         return rand_rxx()
     if string == 'IX':
         return rand_IX()
+    if string == 'rand_phase':
+        # print("hey")
+        return dissipation()
     
+# def dissipation():
+#     gamma = 5*10E-3
+#     # return np.array(
+#     #     [
+#     #         [1, np.sqrt(gamma)],
+#     #         [0, np.sqrt(1-gamma)],
+#     #     ]
+#     # )
+#     return 0.5*(pauli("X")- 1j* pauli('Y'))
+def rand_phase():
+    return phase_gate(np.pi*np.random.rand())
+
 def IX(eps,theta):
     M = np.exp(1j*theta)*(np.sqrt((1-eps))*np.identity(4) + 1j*np.sqrt(eps)*kron(pauli("X"),pauli("X")))
     return M
@@ -71,7 +86,7 @@ def IorCNOT(eps):
 # def IX(eps):
 #     M = np.sqrt((1-eps))*np.identity(4) + 1j* np.sqrt(eps)*kron(pauli("Y"),pauli("Y"))
 #     return M
-
+#%%
 class circuit:
     """
     contains the densop and mixing things
@@ -91,7 +106,8 @@ class circuit:
         meas_r: float=0.0,
         target=0,
         same=0,
-        eps=0.1
+        eps=0.1,
+        phase=False
     ):
         """
         num_elems: number of elements in the chain
@@ -116,6 +132,7 @@ class circuit:
         self.boundary_conditions=bc
         self.meas_r = float(meas_r)
         self.eps = eps
+        self.phase=phase
         """ this need to be updated for different inits"""
         self.gate = gate
 
@@ -213,7 +230,9 @@ class circuit:
             if architecture == "stair":
                 pairs = self.gen_staircase()
                 step_dct.update({self.gate: pairs})
-
+            if self.phase:
+                step_dct.update({"rand_phase":[i for i in range(self.num_elems)]})
+                
         elif operation == "meas":
             if type(architecture) == float:
                 pairs = self.gen_rand_meas()

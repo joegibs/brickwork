@@ -1,5 +1,5 @@
 import brickwork.circuit_TN as bc
-# import brickwork.circuit_class as bc
+import brickwork.circuit_class as bc
 
 
 import numpy as np
@@ -11,7 +11,7 @@ from tqdm import tqdm
 tot_tri = []
 tot_vonq = []
 #%%
-sits =[6,8,10]
+sits =[4]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
@@ -19,9 +19,9 @@ for Sites in sits:
 
     
     interval =np.linspace(0.,0.8,10) 
-    num_samples = 80
+    num_samples = 50
     eps=0.1
-    gate="2haar"
+    gate="markov"
     
     start=time.time()
     for i in tqdm(interval):
@@ -30,31 +30,31 @@ for Sites in sits:
     
         
         circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
-        circ.do_step(num=numstep, rec="von tri_mut sep_mut")
+        circ.do_step(num=numstep, rec="von")
         vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
         data_von = vonq_avg
-        data_sep_mut = circ.rec_sep_mut
-        data_tri_mut = circ.rec_tri_mut
+        # data_sep_mut = circ.rec_sep_mut
+        # data_tri_mut = circ.rec_tri_mut
         
         for j in range(1,num_samples):
             # print("j: ",j)
             circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
-            circ.do_step(num=numstep, rec="von tri_mut sep_mut")
+            circ.do_step(num=numstep, rec="von")
             vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
             data_von = np.average(np.array([data_von, vonq_avg]), axis=0,weights=[j,1] )
-            data_sep_mut = np.average(np.array([data_sep_mut, circ.rec_sep_mut]),axis=0, weights=[j,1] )
-            data_tri_mut = np.average(np.array([data_tri_mut, circ.rec_tri_mut]),axis=0, weights=[j,1] )
+            # data_sep_mut = np.average(np.array([data_sep_mut, circ.rec_sep_mut]),axis=0, weights=[j,1] )
+            # data_tri_mut = np.average(np.array([data_tri_mut, circ.rec_tri_mut]),axis=0, weights=[j,1] )
     
         
         arr_vonq.append(data_von)
-        arr_sep_mut.append(data_sep_mut)
-        arr_tri_mut.append(data_tri_mut)
+        # arr_sep_mut.append(data_sep_mut)
+        # arr_tri_mut.append(data_tri_mut)
     end=time.time()
     tot_vonq.append([x[-1] for x in arr_vonq])
-    tot_tri.append(arr_tri_mut)
+    # tot_tri.append(arr_tri_mut)
 
 #%%
-sits=[6,8,10,4,6,8,4,6,8]
+sits=[6,8,10,12,6,8,4,6,8]
 # sits=[0.1,0.5,0.01,0.05,0.025,0.015,0.3,0.9,0.7]
 fig, ax = plt.subplots()
 for tri in tot_vonq:
@@ -71,7 +71,7 @@ from scipy.optimize import least_squares
 #define objective function that should be minimized
 
 #x = (p - pc)*L^(1/v)
-L=[6,8,10]
+L=[4,6,8]
 interval =np.linspace(0.,0.8,10)
 
 
@@ -112,7 +112,7 @@ def R(params):
     
     return np.sum([[(np.interp(x,x_vals[i],y_vals[i]) - mean_y(x))**2 for x in xi] for i in range(len(L))]) 
     
-initial_guess = [0.15,1.5]
+initial_guess = [0.0,0.1]
 res = minimize(R, initial_guess)
 #%%
 
@@ -122,11 +122,18 @@ y_vals = [[yfunc(p,l,ppc) for p in interval] for l in L]
 # mean_y_vals = [mean_yfunc(p,0.26) for p in interval]
 
 fig, ax = plt.subplots()
-for i in range(3):
+for i in range(len(L)):
     ax.plot(x_vals[i],y_vals[i])
 # ax.plot(np.mean(x_vals,axis=0),mean_y_vals)
 
-sits=[6,8,10,4,6,8,4,6,8]
+sits=[6,8,10,12,6,8,4,6,8]
 ax.legend(title='length',labels=sits)
 plt.title(f"Critical Behavior, pc:{np.round(ppc,3)}, V:{np.round(vv,3)}")
 # ax.set_yscale('log')
+#%%%
+fig, ax = plt.subplots()
+ax.plot(np.transpose(arr_vonq))
+ax.legend(title='meas_r',labels=np.round(interval,3))
+plt.title(f"Entropy, Gate:{gate}, Sites:{Sites}, Samples:{num_samples}, Time={np.round(end-start,3)}")
+
+plt.show()

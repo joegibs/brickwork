@@ -4,14 +4,41 @@ Created on Wed Mar  8 11:51:11 2023
 
 @author: jogib
 """
+import numpy as np
+import matplotlib.pyplot as plt
+from quimb import *
 
 #%%
 def markov(eps):
     # need to check this currently a left matrix....
-    M = np.random.randint(0,high=10,size=(4, 4))
+    M = np.random.randint(0,high=9000,size=(4, 4))
     for i in range(15):
         M = M / np.sum(M, axis=0, keepdims=True)
-        # M = M / np.sum(M, axis=1, keepdims=True)
+        M = M / np.sum(M, axis=1, keepdims=True)
+    if np.isnan(np.min(M)):
+        M=markov(eps)
+    return M
+
+def markov_alt(eps):
+    # need to check this currently a left matrix....
+    M=[]
+    for i in range(4):
+        arr=[]
+        tot = 1
+        for j in range(3):
+            samp = np.random.uniform(0,tot)
+            tot -=samp
+            arr.append(samp)
+        arr.append(tot)
+        M.append(arr)
+    return M
+
+def markov(eps):
+    # need to check this currently a left matrix....
+    M = np.random.poisson(size=(4,4))
+    for i in range(15):
+        M = M / np.sum(M, axis=0, keepdims=True)
+        M = M / np.sum(M, axis=1, keepdims=True)
     if np.isnan(np.min(M)):
         M=markov(eps)
     return M
@@ -23,6 +50,16 @@ def markove(eps):
             [0, 1-eps, eps, 0],
             [0, eps, 1-eps, 0],
             [eps, 0, 0, 1-eps],
+        ])
+    return M
+def markov_mix(eps):
+    # need to check this currently a left matrix....
+    M = np.array(
+        [
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
         ])
     return M
 def rand_rxx():
@@ -67,12 +104,13 @@ def oz():
 thetas = np.array([])
 eigens = np.array([])
 for i in range(10000):
-    mat = rand_IX_q()
+    mat = markov_alt(0.1)
     d, u = np.linalg.eig(mat)
     sort_d = np.sort(d)
     theta_d = np.arctan2(sort_d.real,sort_d.imag)
     # thetas =np.concatenate((thetas,theta_d))
     eigens = np.concatenate((eigens,sort_d))
 # plt.plot(thetas)
-plt.hist(thetas,bins=30,density=True)
+plt.hist(eigens,bins=50,density=True)
+# plt.xlim(0,1.2)
 # plt.hist(eigens,density=True)

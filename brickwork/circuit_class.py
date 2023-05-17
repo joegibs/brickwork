@@ -4,6 +4,7 @@ from quimb import *
 import quimb.tensor as qtn
 from quimb.utils import int2tup
 from quimb.calc import check_dims_and_indices
+from scipy.sparse import diags as scipydiags
 import matplotlib.pyplot as plt
 from opt_einsum import contract
 import time
@@ -20,6 +21,21 @@ def get_arrays(string,eps=0.7):
         return np.identity(4)
     if string =='markov':
         return markov(0.1)
+    if string =='markov_mix':
+        return markov_mix(0.1)
+    if string =='markov_alt':
+        return markov_alt(0.1)
+    if string =='markov_poss':
+        return markov_poss(0.1)
+    if string =='markove':
+        return markove(0.1)
+    if string == 'markovsing':
+        return np.array([[0.05868903, 0.6324406 , 0.2120981 , 0.09677226],
+               [0.06285293, 0.73018191, 0.18595676, 0.02100841],
+               [0.07701416, 0.03678329, 0.87729805, 0.00890451],
+               [0.1113783 , 0.27560368, 0.59326844, 0.01974959]])
+    if string =='markovM':
+        return np.array([[1,0,0,0],[0,0.1,0.1,0],[0,0.1,0.1,0],[0,0.8,0.8,1]])
     if string =="IorCNOT":
         #permutation marticies dont generate ent
         return IorCNOT(0.5)
@@ -35,17 +51,37 @@ def match(theta, phi):
             [np.sin(theta), 0, 0, np.cos(theta)],
         ]
     )
+
+
 def markov(eps):
-    # need to check this currently a left matrix....
-    M = np.random.randint(0,high=10,size=(4, 4))
+    M = np.random.randint(0,high=2000000,size=(4, 4))
     for i in range(15):
         M = M / np.sum(M, axis=0, keepdims=True)
         # M = M / np.sum(M, axis=1, keepdims=True)
     if np.isnan(np.min(M)):
         M=markov(eps)
     return M
-def markove(eps):
+
+def markov_poss(eps):
     # need to check this currently a left matrix....
+    M = np.random.poisson(size=(4,4))
+    for i in range(15):
+        M = M / np.sum(M, axis=0, keepdims=True)
+        # M = M / np.sum(M, axis=1, keepdims=True)
+    if np.isnan(np.min(M)):
+        M=markov(eps)
+    return M
+def markov_mix(eps):
+    # need to check this currently a left matrix....
+    M = np.array(
+        [
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
+            [1/4, 1/4, 1/4, 1/4],
+        ])
+    return M
+def markove(eps):
     M = np.array(
         [
             [1-eps, 0, 0, eps],
@@ -54,6 +90,19 @@ def markove(eps):
             [eps, 0, 0, 1-eps],
         ])
     return M
+def markov_alt(eps):
+    # need to check this currently a left matrix....
+    M=[]
+    for i in range(4):
+        arr=[]
+        tot = 1
+        for j in range(3):
+            samp = np.random.uniform(0,tot)
+            tot -=samp
+            arr.append(samp)
+        arr.append(tot)
+        M.append(arr)
+    return np.transpose(M)
 def IorCNOT(eps):
     pj = [1-eps,eps]
     js = [np.identity(4),kron(pauli('X'),pauli("X"))]
@@ -116,8 +165,10 @@ class circuit:
         self.gate = gate
 
         # self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
-        self.mps=qu(qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)])).to_dense(),sparse=True,qtype="ket")
-
+        # self.mps=qu(qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)])).to_dense(),sparse=True,qtype="ket").real
+        st = "".join(["0" for x in range(self.num_elems)])
+        st = st[:-1]+'1'
+        self.mps=qu(qtn.MPS_computational_state(st).to_dense(),sparse=False,qtype="ket").real
         # if init == "up":
         #     self.mps = computational_state(
         #         "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
@@ -143,7 +194,7 @@ class circuit:
         self.same = same
 
 
-        self.markov = markov(self.eps)
+        # self.markov = markov(self.eps)
         self.match = rand_match()
 
         self.num_steps = num_steps
@@ -157,7 +208,7 @@ class circuit:
 
         self.target = target
         # self.rec_mut_inf = [self.mutinfo(self.target)]
-        # self.rec_bip = []
+        self.rec_bip = []
         self.rec_ent = [self.ent()]
         self.rec_sep_mut=[]
         self.rec_tri_mut=[]
@@ -269,8 +320,7 @@ class circuit:
                 # record things
                 if "mut" in rec:
                     self.rec_mut_inf.append(self.mutinfo(self.target))
-                if "bip" in rec:
-                    self.rec_bip.append(self.bipent())
+
                 if "von" in rec:
                     self.rec_ent.append(self.ent())
         else:
@@ -292,12 +342,14 @@ class circuit:
             self.rec_sep_mut = self.sep_mut()
         if "tri_mut" in rec:
             self.rec_tri_mut = self.tripartite_mut()
+        if "bip" in rec:
+            self.rec_bip = self.bipent(x=int(self.num_elems/2))
                     
 
     def do_operation(self, op, ps):
         if op =='meas':
             # for pairs in ps:
-            self.measure(ps)
+            self.measure_s(ps)
         else:
             pairs = [tuple(i) for i in ps]
             
@@ -309,45 +361,38 @@ class circuit:
             A = pkron(kron(*ops),dims=[2]*self.num_elems,inds=np.array(ps).flatten())
             self.mps = A@self.mps
                 
-    def measure(self, inds):
+    def measure_s(self, inds):
         if len(inds)==0:
             pass
         else:
-            ops = [pauli("Z") for i in inds]
-            A= pkron(kron(*ops),self.dims,inds).real
-            p=qu(self.mps,sparse=False,qtype='ket').real
-            
-            el, ev = eigh(A)
-            js = np.arange(el.size)
-            pj = ev.T@p.flatten()
-            # then choose one
-            # pj = pj/sum(pj)
-            # print(sum(pj))
-            
-            j = np.random.choice(js, p=pj)
-            eigenvalue = el[j]
+            sts=[]
+            ts= scipydiags(self.mps.flatten()).tocsr()
+            tst = qu(ts, sparse=True, qtype='dop').real
+            tst=normalize(tst)
+            for i in range(self.num_elems):
+                if i in inds:
+                    ops = pauli("Z")
+                    states = ptr(tst,self.dims,i)
+                    _,newi=measure(states,ops)
+                    sts.append(newi)
+                else: 
+                    state_n = ptr(tst,self.dims,i)
+                    sts.append(state_n)
 
-            # now combine whole eigenspace
-            P = projector((el, ev), eigenvalue=eigenvalue, tol=1e-8).real
-            # P = np.identity(2**self.num_elems)-P
-
-            total_prob = np.sum(P@p).real
-            # print("@@@tot_prob : ",total_prob)
-            # if total_prob == 0:
-            #     #bad
-            #     return
-            arr = qu((P@p/total_prob),sparse=True,qtype='ket')
-            self.old_mps = self.mps
-            self.mps = arr
+            self.mps = np.diag(kron(*sts)).real
         
     def ent(self, alpha=1):
         if alpha == 1:
-            return entropy_subsys(qu(self.mps,sparse=False),dims=self.dims,sysa=[i for i in range(int(self.num_elems/2))])
+            # print(self.mps)
+            state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
+            return entropy_subsys(state,dims=self.dims,sysa=[i for i in range(int(self.num_elems/2))])
 
     def sep_mut(self):
+        state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
+        state = state/np.trace(state)
         arr = [
             mutinf_subsys(
-                qu(self.mps,sparse=False),
+                qu(state,sparse=False),
                 dims=self.dims,
                 sysa=[1],
                 sysb=[x]
@@ -356,22 +401,24 @@ class circuit:
         ]
         return arr
     
-    def polar_mut(self):
-        arr = [
-            mutinf_subsys(
-                qu(self.mps,sparse=False),
-                dims=self.dims,
-                sysa=[1],
-                sysb=[x]
-            )
-            for x in range(2,self.num_elems)
-        ]
-        return arr
+    # def polar_mut(self):
+    #     arr = [
+    #         mutinf_subsys(
+    #             qu(self.mps,sparse=False),
+    #             dims=self.dims,
+    #             sysa=[1],
+    #             sysb=[x]
+    #         )
+    #         for x in range(2,self.num_elems)
+    #     ]
+    #     return arr
     
     def mutinfo(self, target=0):
+        state =qu(scipydiags(qu(self.mps,qtype='bra')[0]).tocsr(),sparse=True,qtype='dop')
+
         # this is mem bad
         arr = [
-            ptr(self.mps, dims=self.dims, keep=[target, x]).round(4)
+            ptr(state, dims=self.dims, keep=[target, x]).round(4)
             for x in range(np.size(self.dims))
         ]
         mi = [
@@ -381,39 +428,23 @@ class circuit:
         return mi
 
     def bipent(self,x=None):
-        if x is None:
-            arr = [
-                mutinf_subsys(
-                    self.mps,
-                    dims=self.dims,
-                    sysa=list(range(x)),
-                    sysb=list(range(x, self.num_elems)),
-                )
-                for x in range(self.num_elems)
-            ]
-        else:
-            arr = mutinf_subsys(
-                    self.mps,
-                    dims=self.dims,
-                    sysa=list(range(x)),
-                    sysb=list(range(x, self.num_elems)),
-                )
-                
+        state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
+        
+        ha = entropy(ptr(state,self.dims,list(range(x))))
+        hb = entropy(ptr(state,self.dims,list(range(x, self.num_elems))))
+        hab = entropy(ptr(state,self.dims,list(range(self.num_elems))))
+        arr = ha+hb-hab
+        # print(ha,hb,hab,arr)
         return arr
     
     def tripartite_mut(self):
+        state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
+
         elems=np.arange(0,self.num_elems)
         arr= np.array_split(elems,4)
-        return tri_mutinf_subsys(qu(self.mps,sparse=False),self.dims,arr[0],arr[1],arr[2])
+        return tri_mutinf_subsys(qu(state,sparse=False),self.dims,arr[0],arr[1],arr[2])
         ###############################
 
-    def print_state(self):
-        for i in range(len(self.dims)):
-            print(partial_trace(self.mps, self.dims, [i]))
-
-    def plot_state(self):
-        states = [ptr(self.mps, self.dims, x)[0][0] for x in range(self.num_elems)]
-        plt.plot(states)
 #%%
 def tri_mutinf_subsys(
     psi_abc, dims, sysa, sysb, sysc, approx_thresh=2**13, **approx_opts
