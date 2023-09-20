@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug 16 11:41:45 2023
+
+@author: jogib
+"""
+
 
 
 import itertools
@@ -107,8 +114,7 @@ class circuit:
         target=0,
         same=0,
         eps=0.1,
-        phase=False,
-        gate_holes=None
+        phase=False
     ):
         """
         num_elems: number of elements in the chain
@@ -136,7 +142,6 @@ class circuit:
         self.phase=phase
         """ this need to be updated for different inits"""
         self.gate = gate
-        self.gate_holes = gate_holes
 
         # self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
         if bc == "periodic":
@@ -182,7 +187,7 @@ class circuit:
         self.step_tracker = 0
 
         self.target = target
-        self.rec_mut_inf = [self.mutinf()]
+        # self.rec_mut_inf = [self.mutinfo(self.target)]
         # self.rec_bip = []
         self.rec_ent = [self.ent()]
         self.rec_neg = [self.log_neg()]
@@ -251,10 +256,6 @@ class circuit:
             i = 1
         # get pairs
         while i + 2 <= self.num_elems:
-            if self.gate_holes is not None:
-                if np.random.rand() <= self.gate_holes:
-                    i=i+2
-                    continue
             pairs.append([i, i + 1])
             i = i + 2
         if self.boundary_conditions == "periodic":
@@ -300,11 +301,12 @@ class circuit:
 
                 # record things
                 if "mut" in rec:
-                    self.rec_mut_inf.append(self.mutinf())
+                    self.rec_mut_inf.append(self.mutinfo(self.target))
                 if "bip" in rec:
                     self.rec_bip.append(self.bipent())
                 if "von" in rec:
                     self.rec_ent.append(self.ent())
+
                 if "neg" in rec:
                     self.rec_neg.append(self.log_neg())
         else:
@@ -325,9 +327,10 @@ class circuit:
                         self.rec_ent.append(self.ent())
                     if "neg" in rec:
                         self.rec_neg.append(self.log_neg())
-                    if "mut" in rec:
-                        self.rec_mut_inf.append(self.mutinf())
-
+        if "sep_mut" in rec:
+            self.rec_sep_mut = self.sep_mut()
+        if "tri_mut" in rec:
+            self.rec_tri_mut = self.tripartite_mut()
                     
 
     def do_operation(self, op, ps):
@@ -401,7 +404,7 @@ class circuit:
             return self.mps.entropy(int(self.num_elems/2))
         else:
             return cyclic_ent(self.mps,self.dims,[x for x in range(int(self.num_elems/2))], sysb=None)
-            
+
     def sep_mut(self):
         arr = [
             mutinf_subsys(
@@ -415,9 +418,6 @@ class circuit:
         return arr
     def log_neg(self):
         return self.mps.logneg_subsys([i for i in range(int(self.num_elems/2))],[i for i in range(int(self.num_elems/2),self.num_elems)])
-    def mutinf(self):
-        arr = self.mps.to_dense()
-        return mutinf_subsys(arr,self.dims,[i for i in range(int(self.num_elems/2))],[i for i in range(int(self.num_elems/2),self.num_elems)])
     def polar_mut(self):
         arr = [
             mutinf_subsys(
@@ -430,7 +430,7 @@ class circuit:
         ]
         return arr
     
-    def mutinfo_site_to_site(self, target=0):
+    def mutinfo(self, target=0):
         # this is mem bad
         arr = [
             ptr(self.mps, dims=self.dims, keep=[target, x]).round(4)

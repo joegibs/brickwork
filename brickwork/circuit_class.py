@@ -1,4 +1,4 @@
-import itertools
+fddimport itertools
 import numpy as np
 from quimb import *
 import quimb.tensor as qtn
@@ -387,7 +387,7 @@ class circuit:
             state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
             return entropy_subsys(state,dims=self.dims,sysa=[i for i in range(int(self.num_elems/2))])
 
-    def sep_mut(self):
+    def sep_mut_1(self):
         state =qu(scipydiags(self.mps.flatten()).tocsr(),sparse=True,qtype='dop')
         state = state/np.trace(state)
         arr = [
@@ -413,7 +413,7 @@ class circuit:
     #     ]
     #     return arr
     
-    def mutinfo(self, target=0):
+    def sep_mut(self, target=0):
         state =qu(scipydiags(qu(self.mps,qtype='bra')[0]).tocsr(),sparse=True,qtype='dop')
 
         # this is mem bad

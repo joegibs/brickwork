@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed Aug 16 11:41:45 2023
+
+@author: jogib
+"""
+
 
 
 import itertools
@@ -16,19 +23,14 @@ from autoray import do, dag, reshape, conj, get_dtype_name, transpose
 #%%
 
 def get_arrays(string,eps=0.3):
-    if string=='match':
-        return rand_match()
+    
     if string=='2haar':
-        return rand_uni(4)
+        return rand_uni(16)
+    if string=='2haar#':
+        g=rand_uni(4)#CNOT()@kron(hadamard(),np.identity(2))
+        return pkron(g,dims=[2]*4,inds=[0,2])@pkron(g.T,[2]*4,inds=[1,3])
     if string=='identity':
-        return np.identity(4)
-    if string =="IorCNOT":
-        #permutation marticies dont generate ent
-        return IorCNOT(0.5)
-    if string == 'rxx':
-        return rand_rxx()
-    if string == 'IX':
-        return rand_IX()
+        return np.identity(16)
     if string == 'rand_phase':
         # print("hey")
         return dissipation()
@@ -45,47 +47,27 @@ def get_arrays(string,eps=0.3):
 def rand_phase():
     return phase_gate(np.pi*np.random.rand())
 
-def IX(eps,theta):
-    M = np.exp(1j*theta)*(np.sqrt((1-eps))*np.identity(4) + 1j*np.sqrt(eps)*kron(pauli("X"),pauli("X")))
-    return M
-def rand_IX():
-    return IX(np.random.rand(),2*np.pi*np.random.rand())
-
-def match(theta, phi):
-    return np.array(
-        [
-            [np.cos(theta), 0, 0, -np.sin(theta)],
-            [0, np.cos(phi), -np.sin(phi), 0],
-            [0, np.sin(phi), np.cos(phi), 0],
-            [np.sin(theta), 0, 0, np.cos(theta)],
-        ]
-    )
-def rand_rxx():
-    arr = 2 * np.pi * np.random.rand(1)
-    return RXX(arr[0])
-def RXX(theta):
-    return np.array(
-        [
-            [np.cos(theta/2), 0, 0, -1j*np.sin(theta/2)],
-            [0, np.cos(theta/2), -1j*np.sin(theta/2), 0],
-            [0, -1j*np.sin(theta/2), np.cos(theta/2), 0],
-            [-1j*np.sin(theta/2), 0, 0, np.cos(theta/2)],
-        ]
-    )
-
-def rand_match():
-    arr = 2 * np.pi * np.random.rand(2)
-    return match(arr[0]/2, arr[1]/2)
-# def rand_match():
-#     arr = 2 * np.pi * np.random.rand(2)
-#     return match(2 * np.pi *0.4, 2 * np.pi *0.1)
-def IorCNOT(eps):
-    pj = [1-eps,eps]
-    js = [np.identity(4),CNOT()]
-    return js[np.random.choice([0,1], p=pj)]
-# def IX(eps):
-#     M = np.sqrt((1-eps))*np.identity(4) + 1j* np.sqrt(eps)*kron(pauli("Y"),pauli("Y"))
-#     return M
+def mps_to_mpo(a):
+    return a.partial_trace(range(0,a.L))
+def to_lindblad_space(tst):
+    arr = []
+    for i,t in enumerate(tst):
+        # print(t)
+        a = t.fuse({f'k{i}':[f'k{i}',f'b{i}']})
+        arr.append(a)
+    TN = qtn.TensorNetwork(arr)
+    fin = qtn.MatrixProductState(TN.arrays)
+    fin.normalize()
+    return fin
+def from_lindblad_space(fin):
+    rev = qtn.TensorNetwork([i for i in fin])
+    arr=[]
+    for i,t in enumerate(rev):
+        a = t.unfuse({f'k{i}':[f'k{i}',f'b{i}']},{f'k{i}':(2,2)})
+        arr.append(a)
+    TN = qtn.TensorNetwork(arr)
+    ret = qtn.MatrixProductOperator(TN.arrays)
+    return ret/ret.trace()
 #%%
 class circuit:
     """
@@ -136,41 +118,18 @@ class circuit:
         self.phase=phase
         """ this need to be updated for different inits"""
         self.gate = gate
-        self.gate_holes = gate_holes
 
         # self.mps = MPS_rand_state(L=num_elems, bond_dim=50)
         if bc == "periodic":
             cyclic = True
         else:
             cyclic = False
-        self.mps=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]),cyclic=False)
-        # self.mps = qtn.MPS_rand_state(self.num_elems,5)
-        # if init == "up":
-        #     self.mps = computational_state(
-        #         "".join(["0" for x in range(self.num_elems)]), qtype="dop", sparse=False
-        #     )
-        # elif "comp" in init:
-        #     self.mps = computational_state(
-        #         init.removeprefix("comp"), qtype="dop", sparse=False
-        #     )
-        # elif init == "upB":
-        #     self.mps = computational_state(
-        #         "".join(["0" for x in range(self.num_elems)]), qtype="ket", sparse=False
-        #     )
-        # elif init == "rand":
-        #     if self.classical:
-        #         self.mps = computational_state(''.join(f'{x}' for x in [np.random.choice([0, 1]) for i in range(num_elems)]),qtype="dop",sparse=False)
-        #     else:
-        #         self.mps = rand_product_state(self.num_elems,qtype="dop")
-            
-        # elif init == "randB":
-        #     self.mps = rand_product_state(self.num_elems)
+        self.mps_init=qtn.MPS_computational_state("".join(["0" for x in range(self.num_elems)]),cyclic=False)
+
+        self.mps = to_lindblad_space(mps_to_mpo(self.mps_init))
 
         self.dims = [2] * self.num_elems
         self.same = same
-
-
-        self.match = rand_match()
 
         self.num_steps = num_steps
         self.step_num = 0
@@ -182,7 +141,7 @@ class circuit:
         self.step_tracker = 0
 
         self.target = target
-        self.rec_mut_inf = [self.mutinf()]
+        # self.rec_mut_inf = [self.mutinfo(self.target)]
         # self.rec_bip = []
         self.rec_ent = [self.ent()]
         self.rec_neg = [self.log_neg()]
@@ -251,25 +210,8 @@ class circuit:
             i = 1
         # get pairs
         while i + 2 <= self.num_elems:
-            if self.gate_holes is not None:
-                if np.random.rand() <= self.gate_holes:
-                    i=i+2
-                    continue
             pairs.append([i, i + 1])
             i = i + 2
-        if self.boundary_conditions == "periodic":
-            print("hey")
-            if not eoo and not self.num_elems%2:
-                pairs.append([self.num_elems-1,0])
-        return pairs
-
-    def gen_staircase(self):
-        pairs = []
-        if (self.step_num + 1) % self.num_elems == 0:
-            self.step_num = self.step_num + 1
-        pairs.append(
-            [self.step_num % self.num_elems, (self.step_num + 1) % self.num_elems]
-        )
         return pairs
 
     def gen_rand_meas(self):
@@ -300,13 +242,15 @@ class circuit:
 
                 # record things
                 if "mut" in rec:
-                    self.rec_mut_inf.append(self.mutinf())
+                    self.rec_mut_inf.append(self.mutinfo(self.target))
                 if "bip" in rec:
                     self.rec_bip.append(self.bipent())
                 if "von" in rec:
                     self.rec_ent.append(self.ent())
                 if "neg" in rec:
                     self.rec_neg.append(self.log_neg())
+                if "sharp" in rec:
+                    self.rec_ent.append(self.ent_sharp())
         else:
             self.step_tracker += num
             for st, i in enumerate(self.circ):
@@ -323,11 +267,14 @@ class circuit:
                     # print("rec")
                     if "von" in rec:
                         self.rec_ent.append(self.ent())
+                    if "sharp" in rec:
+                        self.rec_ent.append(self.ent_sharp())
                     if "neg" in rec:
                         self.rec_neg.append(self.log_neg())
-                    if "mut" in rec:
-                        self.rec_mut_inf.append(self.mutinf())
-
+        if "sep_mut" in rec:
+            self.rec_sep_mut = self.sep_mut()
+        if "tri_mut" in rec:
+            self.rec_tri_mut = self.tripartite_mut()
                     
 
     def do_operation(self, op, ps):
@@ -358,35 +305,9 @@ class circuit:
                 self.mps.gate(gate,pairs,contract='swap+split',inplace=True)
                 # self.mps.normalize()
             
-        # Needs some work
-        # if op == "bell":
-        #     for pair in ps:
-        #         # print(pair)
-        #         had = ikron(hadamard(), [2] * self.num_elems, pair[0])
-        #         step1 = had @ self.dop @ had.H
-        #         cn = pkron(CNOT(), [2] * self.num_elems, pair)
-        #         self.dop = cn @ step1 @ cn.H
-
-        # elif op == "haar":
-        #     for pair in ps:
-        #         haar = ikron(rand_uni(4), [2] * self.num_elems, pair)
-        #         self.dop = haar @ self.dop @ haar.H
-        #         # self.dop.round(4)
-
-        # elif op == "match":
-        #     for pair in ps:
-        #         if self.same:
-        #             mar = self.match
-        #         else:
-        #             mar = rand_match()
-        #         mat = qu(ikron(mar, [2] * self.num_elems, pair))
-        #         self.dop = mat @ self.dop @ mat.H
-
-        # elif op == "meas":
-        #     for pair in ps:
-        #         self.measure(pair)
                 
     def measure(self, ind):
+        # meas_mps = from_lindblad_space(self.mps)
         # self.dop = normalize(self.dop)
         # print(ind)
         try:
@@ -401,7 +322,11 @@ class circuit:
             return self.mps.entropy(int(self.num_elems/2))
         else:
             return cyclic_ent(self.mps,self.dims,[x for x in range(int(self.num_elems/2))], sysb=None)
-            
+    def ent_sharp(self):
+        tst = from_lindblad_space(self.mps)
+        traced_tst=ptr(tst.to_dense(),self.dims,[x for x in range(int(self.num_elems/2))])
+        return entropy(traced_tst)
+     
     def sep_mut(self):
         arr = [
             mutinf_subsys(
@@ -415,9 +340,6 @@ class circuit:
         return arr
     def log_neg(self):
         return self.mps.logneg_subsys([i for i in range(int(self.num_elems/2))],[i for i in range(int(self.num_elems/2),self.num_elems)])
-    def mutinf(self):
-        arr = self.mps.to_dense()
-        return mutinf_subsys(arr,self.dims,[i for i in range(int(self.num_elems/2))],[i for i in range(int(self.num_elems/2),self.num_elems)])
     def polar_mut(self):
         arr = [
             mutinf_subsys(
@@ -430,7 +352,7 @@ class circuit:
         ]
         return arr
     
-    def mutinfo_site_to_site(self, target=0):
+    def mutinfo(self, target=0):
         # this is mem bad
         arr = [
             ptr(self.mps, dims=self.dims, keep=[target, x]).round(4)

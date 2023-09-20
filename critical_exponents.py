@@ -1,5 +1,7 @@
 import brickwork.circuit_TN as bc
-import brickwork.circuit_class as bc
+# import brickwork.circuit_class as bc
+
+import brickwork.circuit_lindblad as bc
 
 
 import numpy as np
@@ -11,26 +13,28 @@ from tqdm import tqdm
 tot_tri = []
 tot_vonq = []
 #%%
-sits =[4]
+gate_holes = 0.
+sits =[6]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
     arr_tri_mut = []
 
     
-    interval =np.linspace(0.,0.8,10) 
+    interval =[0]#np.linspace(0.,1,2) 
     num_samples = 50
     eps=0.1
-    gate="markov"
+    gate="2haar#"
+    rec='sharp'
     
     start=time.time()
     for i in tqdm(interval):
         # print(i)
-        numstep = 4*Sites
+        numstep = 8*Sites
     
         
-        circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
-        circ.do_step(num=numstep, rec="von")
+        circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick",gate_holes=gate_holes)
+        circ.do_step(num=numstep, rec=rec)
         vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
         data_von = vonq_avg
         # data_sep_mut = circ.rec_sep_mut
@@ -38,8 +42,8 @@ for Sites in sits:
         
         for j in range(1,num_samples):
             # print("j: ",j)
-            circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick")
-            circ.do_step(num=numstep, rec="von")
+            circ = bc.circuit(Sites, numstep, meas_r=float(i), gate=gate, architecture="brick",gate_holes=gate_holes)
+            circ.do_step(num=numstep, rec=rec)
             vonq_avg = [(circ.rec_ent[i]+circ.rec_ent[i+1])/2 for i in np.arange(0,len(circ.rec_ent)-1,2)]
             data_von = np.average(np.array([data_von, vonq_avg]), axis=0,weights=[j,1] )
             # data_sep_mut = np.average(np.array([data_sep_mut, circ.rec_sep_mut]),axis=0, weights=[j,1] )
@@ -54,7 +58,7 @@ for Sites in sits:
     # tot_tri.append(arr_tri_mut)
 
 #%%
-sits=[6,8,10,12,6,8,4,6,8]
+sits=[4,6]
 # sits=[0.1,0.5,0.01,0.05,0.025,0.015,0.3,0.9,0.7]
 fig, ax = plt.subplots()
 for tri in tot_vonq:
@@ -71,8 +75,8 @@ from scipy.optimize import least_squares
 #define objective function that should be minimized
 
 #x = (p - pc)*L^(1/v)
-L=[4,6,8]
-interval =np.linspace(0.,0.8,10)
+L=[4,6]
+# interval =np.linspace(0.,0.8,20)
 
 
 #guess pc and say v =1 plot
@@ -126,7 +130,7 @@ for i in range(len(L)):
     ax.plot(x_vals[i],y_vals[i])
 # ax.plot(np.mean(x_vals,axis=0),mean_y_vals)
 
-sits=[6,8,10,12,6,8,4,6,8]
+sits=[4,6,8]
 ax.legend(title='length',labels=sits)
 plt.title(f"Critical Behavior, pc:{np.round(ppc,3)}, V:{np.round(vv,3)}")
 # ax.set_yscale('log')
