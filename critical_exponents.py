@@ -1,7 +1,7 @@
 import brickwork.circuit_TN as bc
 # import brickwork.circuit_class as bc
 
-import brickwork.circuit_lindblad as bc
+# import brickwork.circuit_lindblad as bc
 
 
 import numpy as np
@@ -14,18 +14,18 @@ tot_tri = []
 tot_vonq = []
 #%%
 gate_holes = 0.
-sits =[6]
+sits =[4,6]
 for Sites in sits:
     arr_vonq=[]
     arr_sep_mut=[]
     arr_tri_mut = []
 
     
-    interval =[0]#np.linspace(0.,1,2) 
+    interval =np.linspace(0.,1,10) 
     num_samples = 50
     eps=0.1
-    gate="2haar#"
-    rec='sharp'
+    gate="2haar"
+    rec='von'
     
     start=time.time()
     for i in tqdm(interval):

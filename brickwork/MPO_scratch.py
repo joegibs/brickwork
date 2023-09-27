@@ -201,8 +201,8 @@ print(np.all(np.isclose(rho.to_dense(),check.to_dense())))
 #%% check brickwork
 gates=[rand_herm(4),rand_herm(4),rand_herm(4)]
 gates=[np.identity(4),np.identity(4),np.identity(4)]
-gates=[CNOT(),CNOT(),rand_herm(4)]
-gates=[rand_uni(4),np.identity(4),np.identity(4)]
+# gates=[CNOT(),CNOT(),rand_herm(4)]
+# gates=[rand_uni(4),np.identity(4),np.identity(4)]
 
 
 
@@ -282,12 +282,30 @@ print(np.all(np.isclose(a,rho)))
 def ent_sharp(mps,dims):
     tst = from_lindblad_space(mps)
     traced_tst=ptr(tst.to_dense(),dims,[x for x in range(int(len(dims)/2))])
+    # print(trace(traced_tst))
     return entropy(traced_tst)
 def ent(mps):
     return mps.entropy(int(mps.L/2))
 def ent_rho(rho,dims):
     traced_tst=ptr(rho,dims,[x for x in range(int(len(dims)/2))])
     return entropy(traced_tst)
+def neg_sharp(mps,dims):
+    L=len(dims)
+    tst = from_lindblad_space(mps)
+    return logneg_subsys(tst.to_dense(),dims,[i for i in range(int(L/2))],sysb=[i for i in range(int(L/2),L)])
+def mut_sharp(mps,dims):
+    L=len(dims)
+    tst = from_lindblad_space(mps)
+    return mutinf_subsys(tst.to_dense(),dims,[i for i in range(int(L/2))],sysb=[i for i in range(int(L/2),L)])
+#%%
+#%% chec random state entropy
+tst=qtn.MPS_rand_state(2,2)
+tst_rho=tst.partial_trace(range(0,2))
+sup_tst = to_lindblad_space(tst_rho)
+chk = from_lindblad_space(sup_tst)
+print(ent_sharp(sup_tst,[2]*2))
+print(ent(tst))
+print(np.isclose(tst_rho.to_dense(),chk.to_dense()))
 
 #%% bell state entropy check
 gates=[ikron(hadamard(),[2]*2,0),CNOT()]
@@ -397,8 +415,7 @@ for psit in tebd.at_times(ts, tol=1e-3):
     
     # there is one more site than bond, so start with mag
     #     this also sets the orthog center to 0
-    mz_j += [psit.magnetization(0)]
-    be_t_b.append(psit.entropy(20))
+    be_t_b.append(psit.entropy(int(L/2)))
   
 tebd.err  #  should be < tol=1e-3
 
@@ -406,12 +423,14 @@ H = qtn.MPO_ham_heis(L)
 print("Initial energy:", qtn.expec_TN_1D(psi0.H, H, psi0))
 print("Final energy:", qtn.expec_TN_1D(tebd.pt.H , H, tebd.pt))
 #%%
+L=6
+psi0 = qtn.MPS_computational_state('000100')
+
 builder = qtn.SpinHam1D(S=1/2)
 
 # specify the interaction term (defaults to all sites)
-builder += 0.5, '+', '-'
-builder += 0.5, '-', '+'
-builder += 1.0, 'Z', 'Z'
+builder += 1, 'Z', 'Z'
+builder += 1.0, 'X'
 
 # add random z-fields to each site
 # np.random.seed(2)
@@ -427,13 +446,10 @@ tebd = qtn.TEBD(psi0, H)
 tebd.split_opts['cutoff'] = 1e-12
 
 # times we are interested in
-ts = np.linspace(0, 80, 101)
+ts = np.linspace(0, 30, 101)
 
-be_t_b = []  # block entropy
+be_t_b0 = []  # block entropy
 
-# range of bonds, and sites
-js = np.arange(0, L)
-bs = np.arange(1, L)
 # generate the state at each time in ts
 #     and target error 1e-3 for whole evolution
 for psit in tebd.at_times(ts, tol=1e-3):
@@ -441,28 +457,27 @@ for psit in tebd.at_times(ts, tol=1e-3):
     
     # there is one more site than bond, so start with mag
     #     this also sets the orthog center to 0
-    mz_j += [psit.magnetization(0)]
-    be_t_b.append(psit.entropy(20))
+    be_t_b0.append(psit.entropy(int(L/2)))
   
 tebd.err  #  should be < tol=1e-3
+plt.plot(ts,be_t_b0)
 
-H = qtn.MPO_ham_heis(L)
-print("Initial energy:", qtn.expec_TN_1D(psi0.H, H, psi0))
-print("Final energy:", qtn.expec_TN_1D(tebd.pt.H , H, tebd.pt))
 #%% yolo attempt
 #build state
-L=10
-psir = qtn.MPS_computational_state('0001000010')
+L=6
+psir = qtn.MPS_computational_state('000100')
 # psir = qtn.MPS_computational_state('100001')
-rhor = psir.ptr([0,1,2,3,4,5,6,7,8,9])
+rhor = psir.ptr([0,1,2,3,4,5])
 psi0=to_lindblad_space(rhor)
 
 builder = qtn.SpinHam1D(S=3/2)
 #hmmmmmm
-builder += 1, kron(pauli('Z'),np.identity(2)),kron(pauli('Z'),np.identity(2))
-builder += 1, kron(np.identity(2),pauli('Z').T),kron(np.identity(2),pauli('Z').T)
-builder += 1, kron(pauli('X'),np.identity(2))
-builder += 1, kron(np.identity(2),pauli('X').T)
+j=1
+builder += 1/4, kron(pauli('Z'),np.identity(2)),kron(pauli('Z'),np.identity(2))
+builder += -1/4, kron(np.identity(2),pauli('Z').T),kron(np.identity(2),pauli('Z').T)
+
+builder += 1/2, kron(pauli('X'),np.identity(2))
+builder += -1/2, kron(np.identity(2),pauli('X').T)
 
 H=builder.build_local_ham(L)
 
@@ -473,13 +488,12 @@ tebd = qtn.TEBD(psi0, H)
 tebd.split_opts['cutoff'] = 1e-12
 
 # times we are interested in
-ts = np.linspace(0, 60, 101)
+ts = np.linspace(0, 10, 101)
 
 be_t_b = []  # block entropy
+be_t_b2 = []  # block entropy
 
-# range of bonds, and sites
-js = np.arange(0, L)
-bs = np.arange(1, L)
+
 # generate the state at each time in ts
 #     and target error 1e-3 for whole evolution
 for psit in tebd.at_times(ts, tol=1e-3):
@@ -487,6 +501,145 @@ for psit in tebd.at_times(ts, tol=1e-3):
     
     # there is one more site than bond, so start with mag
     #     this also sets the orthog center to 0
-    be_t_b.append(psit.entropy(int(L/2)))
+    be_t_b.append(ent_sharp(psit,[2]*L))
+    be_t_b2.append(psit.entropy(int(L/2)))
+
+    # be_t_b.append(psit.entropy(int(L/2)))
+
   
 tebd.err  #  should be < tol=1e-
+plt.plot(ts,be_t_b,ts,be_t_b2,ts,be_t_b0)
+
+
+#%% M check
+L=2
+psir = qtn.MPS_computational_state('00')
+# psir = qtn.MPS_computational_state('100001')
+rhor = psir.ptr([0,1])
+psi0=to_lindblad_space(rhor)
+
+builder = qtn.SpinHam1D(S=3/2)
+#hmmmmmm
+builder += 1, kron(pauli('X'),np.identity(2)),kron(pauli('X'),np.identity(2))
+builder += -1, kron(np.identity(2),pauli('X').T),kron(np.identity(2),pauli('X').T)
+# builder += 1, kron(pauli('Z'),np.identity(2))
+# builder += -1, kron(np.identity(2),pauli('Z').T)
+
+H=builder.build_local_ham(L)
+
+
+arr_vhk=H.get_gate([0,1])
+
+#%%
+L=2
+psi0 = qtn.MPS_computational_state('0000')
+
+builder = qtn.SpinHam1D(S=1/2)
+
+# specify the interaction term (defaults to all sites)
+builder += 1/2, 'X', 'X'
+# builder += -1.0, 'Z'
+
+# add random z-fields to each site
+# np.random.seed(2)
+# for i in range(L):
+#     builder[i] += 2 * np.random.rand() - 1, 'Z'
+    
+H = builder.build_local_ham(L)
+arr_hk=H.get_gate([0,1])
+#%%
+j=1
+a=kron(kron(-j*pauli('X'),np.identity(2)),kron(pauli('X'),np.identity(2)))
+b = kron(-kron(np.identity(2),-j*pauli('X').T),kron(np.identity(2),pauli('X').T))
+c=(a+b).real
+
+#%%
+chk = qtn.MPO_ham_ising(2,j=1,bx=1)
+chk = qtn.MPO_ham_heis(2,[-1,0,0],bz=-1)
+#%%
+#%% add a lindblad operator yolo
+#build state
+L=6
+psir = qtn.MPS_computational_state('000100')
+# psir = qtn.MPS_computational_state('100001')
+rhor = psir.ptr([0,1,2,3,4,5])
+psi0=to_lindblad_space(rhor)
+
+builder = qtn.SpinHam1D(S=3/2)
+#hmmmmmm
+j=1
+builder += 1/4, kron(pauli('Z'),np.identity(2)),kron(pauli('Z'),np.identity(2))
+builder += -1/4, kron(np.identity(2),pauli('Z').T),kron(np.identity(2),pauli('Z').T)
+
+builder += 1/2, kron(-pauli('X'),np.identity(2))
+builder += -1/2, kron(np.identity(2),-pauli('X').T)
+
+#dephase term
+# gamma=0.5
+# pZ = pauli('Z')
+# builder += -1/2*gamma, kron(pZ,pZ.H.T)
+# builder += 1/4*gamma, kron(pZ.H@pZ,np.identity(2))
+# builder += 1/4*gamma, kron(np.identity(2),(pZ.H@pZ).T)
+
+
+H=builder.build_local_ham(L)
+
+tebd = qtn.TEBD(psi0, H)
+
+# Since entanglement will not grow too much, we can set quite
+#     a small cutoff for splitting after each gate application
+tebd.split_opts['cutoff'] = 1e-12
+
+# times we are interested in
+ts = np.linspace(0, 100, 201)
+
+ne_t_b = []  # block negativity
+me_t_b = []
+
+be_t_b = []  # block entropy
+be_t_b2 = []  # block entropy
+
+
+
+# generate the state at each time in ts
+#     and target error 1e-3 for whole evolution
+for psit in tebd.at_times(ts, tol=1e-3):
+    be_b = []
+    
+    # there is one more site than bond, so start with mag
+    #     this also sets the orthog center to 0
+    be_t_b.append(ent_sharp(psit,[2]*L))
+    be_t_b2.append(psit.entropy(int(L/2)))
+    ne_t_b.append(neg_sharp(psit,[2]*L))
+    me_t_b.append(mut_sharp(psit,[2]*L))
+
+
+    # be_t_b.append(psit.entropy(int(L/2)))
+
+  
+tebd.err  #  should be < tol=1e-
+# plt.plot(ts,be_t_b,ts,be_t_b2,ts,be_t_b0,ts,ne_t_b,ts,me_t_b)
+plt.plot(ts,be_t_b,ts,be_t_b2,ts,ne_t_b)
+#%% M check
+L=2
+psir = qtn.MPS_computational_state('00')
+# psir = qtn.MPS_computational_state('100001')
+rhor = psir.ptr([0,1])
+psi0=to_lindblad_space(rhor)
+
+builder = qtn.SpinHam1D(S=3/2)
+#hmmmmmm
+builder += 1/4, kron(pauli('Z'),np.identity(2)),kron(pauli('Z'),np.identity(2))
+builder += -1/4, kron(np.identity(2),pauli('Z').T),kron(np.identity(2),pauli('Z').T)
+
+builder += 1/2, kron(-pauli('X'),np.identity(2))
+builder += -1/2, kron(np.identity(2),-pauli('X').T)
+gamma=0.5j
+pZ = pauli('Z')
+builder += 1/2*gamma, kron(pZ,pZ.H.T)
+builder += -1/4*gamma, kron(pZ.H@pZ,np.identity(2))
+builder += -1/4*gamma, kron(np.identity(2),(pZ.H@pZ).T)
+H=builder.build_local_ham(L)
+
+
+arr_vhk=H.get_gate([0,1])
