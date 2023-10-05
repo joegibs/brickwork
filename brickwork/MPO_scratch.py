@@ -488,7 +488,7 @@ tebd = qtn.TEBD(psi0, H)
 tebd.split_opts['cutoff'] = 1e-12
 
 # times we are interested in
-ts = np.linspace(0, 10, 101)
+ts = np.linspace(0, 30, 101)
 
 be_t_b = []  # block entropy
 be_t_b2 = []  # block entropy
